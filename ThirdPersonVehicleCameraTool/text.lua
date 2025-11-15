@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-04-28, 00:00 UTC+01:00 (MEZ)
+Version: 2025-05-04, 14:15 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -45,14 +45,14 @@ return {
 	GUI_TBL_LABL_VEH_TIP = "The vehicle's name.",
 	GUI_TBL_LABL_APP_TIP = "The vehicle's appearance name.",
 	GUI_TBL_LABL_CAMID_TIP = "The vehicle's camera identifier.",
-	GUI_TBL_LABL_CCAMKEY_TIP = "The vehicle's camera key.",
+	GUI_TBL_LABL_CCAMID_TIP = "The vehicle's custom camera identifier.",
 	GUI_TBL_LABL_PSET_TIP = "The vehicle's active camera preset.",
 	GUI_TBL_LABL_CLO_TIP = "Camera Distance: Close",
 	GUI_TBL_LABL_MID_TIP = "Camera Distance: Medium",
 	GUI_TBL_LABL_FAR_TIP = "Camera Distance: Far",
 
 	--GUI: 📌 Table Value Tooltips
-	GUI_TBL_VAL_CCAMKEY_TIP = "Detected levels for this ID:\n%s",
+	GUI_TBL_VAL_CCAMID_TIP = "\u{f1980} Camera Access Map| |Distance Level:|Database Access Path:",
 	GUI_TBL_VAL_PSET_TIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of Vehicle or Appearance, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} Vehicle: (e.g. \"%s\")\n\u{f0b3b}\u{f07ac} Appearance: (e.g. \"%s\")\n\u{f0b3c}\u{f010b} Prefix of Vehicle: (e.g. \"%s\")\n\u{f0b3d}\u{f07ac} Prefix of Appearance: (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority, otherwise, you will need to delete the one that will steal its priority. Take a look at the Preset File Manager to delete presets.",
 	GUI_TBL_VAL_ANG_TIP = "\u{f10f3} Angles (°)| |Default:|%d|Min:|%d|Max:|%d|In Use:|%d",
 	GUI_TBL_VAL_X_TIP = "\u{f0d4c} X-Offset| |Default:|%.3f|Min:|%.3f|Max:|%.3f|In Use:|%.3f|Decrease:|Left|Increase:|Right",
