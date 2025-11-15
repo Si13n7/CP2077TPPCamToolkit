@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-09-28, 19:40 UTC+01:00 (MEZ)
+Version: 2025-10-02, 09:33 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -185,8 +185,7 @@ local format, rep, concat, insert, remove, sort, unpack, abs, ceil, floor, max, 
 ---Loads all static UI and log string constants from `text.lua` into the global `Text` table.
 ---This is the most efficient way to manage display strings separately from logic and code.
 ---@type table<string, string>
-local Text = dofile(
-	"text.lua")
+local Text = dofile("text.lua")
 
 ---Developer mode levels used to control the verbosity and behavior of debug output.
 ---@type DevLevelEnum
@@ -440,13 +439,14 @@ local config = {
 	---Global option data.
 	---@type table<string, IOptionData>
 	options = {
+		---Mod-only option: enables or disables all vanilla presets.
 		noVanilla = {
 			DisplayName = Text.GUI_GOPT_NVAN,
 			Tooltip = Text.GUI_GOPT_NVAN_TIP,
 			Default = false
 		},
 
-		---`DefaultParams` that can be customized by the user.
+		---Game option: adjusts the field of view via `DefaultParams`.
 		fov = {
 			DisplayName = Text.GUI_GOPT_FOV,
 			Default = 69,
@@ -454,6 +454,8 @@ local config = {
 			Max = 150,
 			IsDefaultParam = true
 		},
+
+		---Game option: toggles automatic camera reset in `DefaultParams`.
 		lockedCamera = {
 			DisplayName = Text.GUI_GOPT_NAC,
 			Default = false,
@@ -461,10 +463,10 @@ local config = {
 		}
 	},
 
-	---Determines whether the Global Parameters window is open.
+	---Determines whether the Global Settings window is open.
 	isOpen = false,
 
-	---Determines whether global parameters have been modified.
+	---Determines whether Global Settings have been modified.
 	isUnsaved = false
 }
 
@@ -792,6 +794,45 @@ local function areNumeric(...)
 	return true
 end
 
+---Compares two values as alphanumeric strings.
+---Strings are compared alphabetically, but numeric substrings are
+---compared as numbers to ensure natural ordering.
+---For example, "hello2" < "hello11".
+---@param a any # First value to compare
+---@param b any # Second value to compare
+---@return boolean # True if `a` should come before `b`, false otherwise
+local function alphaNumericCompare(a, b)
+	a, b = tostring(a), tostring(b)
+	local ai, bi = 1, 1
+	while ai <= #a and bi <= #b do
+		local aPart = a:match("^%D*", ai)
+		local bPart = b:match("^%D*", bi)
+		if aPart ~= bPart then
+			return aPart < bPart
+		end
+
+		ai = ai + #aPart
+		bi = bi + #bPart
+
+		local aNum = a:match("^%d+", ai)
+		local bNum = b:match("^%d+", bi)
+		if aNum and bNum then
+			aNum, bNum = tonumber(aNum), tonumber(bNum)
+			if aNum ~= bNum then
+				return aNum < bNum
+			end
+		elseif aNum then
+			return true
+		elseif bNum then
+			return false
+		end
+
+		ai = ai + (aNum and #tostring(aNum) or 0)
+		bi = bi + (bNum and #tostring(bNum) or 0)
+	end
+	return #a < #b
+end
+
 ---Compares two values for equality, including support for numbers with tolerance and nested tables.
 ---Performs deep comparison for tables and numeric tolerance (1e-4) for numbers or number-like strings.
 ---Also supports booleans, nil, functions, userdata, and threads using standard equality (`==`).
@@ -990,15 +1031,13 @@ end
 ---@param s string # The input string (e.g., "v_sport2_porsche_911turbo_player").
 ---@return string # The shortened string (e.g., "v_sport2_porsche").
 local function chopUnderscoreParts(s)
+	if not isStringValid(s) then return "" end
 	local t = {}
-	s = tostring(s or "")
 	for p in s:gmatch("[^_]+") do
 		insert(t, p)
 	end
-	local n = #t / 2
-	if n <= 1 then
-		n = n + 1
-	end
+	local n = floor(#t / 2)
+	n = n < 2 and n + 1 or n
 	return concat(t, "_", 1, n)
 end
 
@@ -1022,9 +1061,7 @@ local function opairs(t)
 	for k in pairs(t) do
 		insert(ks, k)
 	end
-	sort(ks, function(a, b)
-		return tostring(a) < tostring(b)
-	end)
+	sort(ks, alphaNumericCompare)
 	local i = 0
 	return function()
 		i = i + 1
@@ -1101,39 +1138,34 @@ end
 ---For numbers, a trimmed 3-digit float format is used (e.g., 1.000 → "1", 3.140 → "3.14").
 ---For tables, the output is compact, recursively formatted, and uses sorted keys.
 ---Numeric keys in non-array tables are automatically converted to hexadecimal.
----@param x any # The value to convert to string.
----@param hexNums boolean? # Optional. If true, numeric values are output as hexadecimal (e.g., 255 → "0xFF").
----@return string # A string representation of the value.
-local function serialize(x, hexNums)
+---Can optionally produce pretty-printed output with indentation.
+---@param x any # The value to serialize.
+---@param pretty boolean? # Optional. If true, output is formatted with line breaks and indentation.
+---@param hexNums boolean? # Optional. If true, numbers are serialized in hexadecimal
+---@param indent integer? # Internal indentation level (do not provide manually).
+---@return string # The serialized string representation of `x`.
+local function serialize(x, pretty, hexNums, indent)
+	hexNums = hexNums or false
+	indent = indent or 0
+
 	if not isTable(x) then
 		if isString(x) then
-			return format("%q", x)
+			return format("%q", x:gsub("\n", "\\n"))
 		elseif isNumeric(x) then
 			local str = format("%.2f", x):gsub("0+$", ""):gsub("%.$", "")
-			return hexNums and format("0x%02X", str) or str
+			return hexNums and format("0x%04X", str) or str
 		elseif isVector3(x) then
-			local t = {}
-			for _, a in ipairs({ "x", "y", "z" }) do
-				insert(t, serialize(x[a], hexNums))
-			end
-			return format("Vector3{x=%s,y=%s,z=%s}", unpack(t))
+			return format("Vector3{x=%s,y=%s,z=%s}",
+				serialize(x.x, pretty, hexNums, indent),
+				serialize(x.y, pretty, hexNums, indent),
+				serialize(x.z, pretty, hexNums, indent))
 		else
 			return tostring(x)
 		end
 	end
 
-	if isArray(x) then
-		local parts = {}
-		for i = 1, #x do
-			parts[i] = serialize(x[i], hexNums)
-		end
-		return format("{%s}", concat(parts, ","))
-	end
-
-	if not isTable(x) then return tostring(x) end
-
 	if areNumber(x.Major, x.Minor, x.Build, x.Revision) then
-		if x.Build > 0 and x.Revision > 0 then
+		if x.Revision > 0 then
 			return format("%d.%d.%d.%d", x.Major, x.Minor, x.Build, x.Revision)
 		elseif x.Build > 0 then
 			return format("%d.%d.%d", x.Major, x.Minor, x.Build)
@@ -1142,17 +1174,30 @@ local function serialize(x, hexNums)
 		end
 	end
 
+	local isArr = isArray(x)
 	local parts = {}
 	for k, v in opairs(x) do
 		local key
-		if isString(k) and k:match("^[%a_][%w_]*$") ~= nil then
+		if isString(k) and k:match("^[%a_][%w_]*$") then
 			key = k
 		else
-			key = format("[%s]", serialize(k, isNumeric(k)))
+			key = format("[%s]", serialize(k, pretty, not isArr and isNumeric(k), indent))
 		end
-		parts[#parts + 1] = format("%s=%s", key, serialize(v, hexNums))
+		local value = serialize(v, pretty, hexNums, indent + 1)
+		if pretty then
+			parts[#parts + 1] = format("%s%s = %s", rep("\t", indent + 1), key, value)
+		else
+			parts[#parts + 1] = format("%s=%s", key, value)
+		end
 	end
-	return format("{%s}", concat(parts, ","))
+
+	if #parts > 0 then
+		if pretty then
+			return format("{\n%s\n%s}", concat(parts, ",\n"), rep("\t", indent))
+		end
+		return format("{%s}", concat(parts, ","))
+	end
+	return "{}"
 end
 
 ---Computes an Adler-53 checksum over one or more values without allocating a new table.
@@ -1280,22 +1325,110 @@ local function getRuntimeVersion()
 	return parseVersion(GetVersion())
 end
 
----Extracts the record name from a TweakDBID string representation.
----@param data TDBID # The TweakDBID to be parsed.
----@return string? # The extracted record name, or nil if not found.
+---Extracts the name from a TweakDBID record.
+---@param data TDBID # The TweakDBID record to be parsed.
+---@return string? # The extracted name, or nil if not found.
 local function getRecordName(data)
 	if not data then return nil end
-	if not contains(data, "--[[") or not contains(data, "--]]") then
-		return TDBID.ToStringDEBUG(data)
+
+	local ok, result = pcall(TDBID.ToStringDEBUG, data)
+	if ok then return result end
+
+	local str = (tostring(data):match("%-%-%[%[(.-)%-%-%]%]") or ""):match("^%s*(.-)%s*$")
+	if isStringValid(str) then
+		return str
 	end
-	return tostring(data):match("%-%-%[%[(.-)%-%-%]%]"):match("^%s*(.-)%s*$")
+
+	return nil
+end
+
+---Initializes a table in the database.
+---Creates the table if it does not exist.
+---@param tableName string # Name of the table to create.
+---@param ... string # Column definitions, each as a separate string.
+local function sqliteInit(tableName, ...)
+	assert(isStringValid(tableName) and select("#", ...) > 0, Text.THROW_SQL_INIT)
+	local columns = concat({ ... }, ", ")
+	local query = format("CREATE TABLE IF NOT EXISTS %s(%s);", tableName, columns)
+	db:exec(query)
+end
+
+---Begins a transaction.
+local function sqliteBegin()
+	db:exec("BEGIN;")
+end
+
+---Commits a transaction.
+local function sqliteCommit()
+	db:exec("COMMIT;")
+end
+
+---Rebuilds the database file to reclaim free space and remove deleted content.
+local function sqliteVacuum()
+	return db:exec("VACUUM;")
+end
+
+---Retrieves rows from a table with optional columns.
+---@param tableName string # Name of the table
+---@param ... string # Optional column names to select, defaults to "*"
+---@return table # Array of rows, each row is an array of values
+local function sqliteRows(tableName, ...)
+	if not isStringValid(tableName) then return {} end
+	local columns = select("#", ...) > 0 and concat({ ... }, ", ") or "*"
+	local query = format("SELECT %s FROM %s;", columns, tableName)
+	local result = {}
+	for row in db:rows(query) do
+		insert(result, row)
+	end
+	return result
+end
+
+---Inserts or updates a row by primary key.
+---If a conflict on the key occurs, the existing row will be updated.
+---@param tableName string # Name of the table to insert into.
+---@param keyColumn string # Column that acts as the primary key.
+---@param colValPairs table # Key-value table of columns and their values.
+---@return boolean? # True on success, nil on failure.
+local function sqliteUpsert(tableName, keyColumn, colValPairs)
+	assert(areStringValid(tableName, keyColumn) and isTableValid(colValPairs), Text.THROW_SQL_UPSERT)
+	local fields, values, updates = {}, {}, {}
+	for c, v in pairs(colValPairs) do
+		insert(fields, c)
+		if isNumber(v) or isBoolean(v) then
+			insert(values, tostring(v))
+		elseif isString(v) then
+			v = v:gsub("'", "''")
+			insert(values, "'" .. v .. "'")
+		else
+			v = serialize(v):gsub("'", "''")
+			insert(values, "'" .. v .. "'")
+		end
+		insert(updates, c .. "=excluded." .. c)
+	end
+	local query = format("INSERT INTO %s(%s) VALUES(%s) ON CONFLICT(%s) DO UPDATE SET %s;",
+		tableName,
+		concat(fields, ","),
+		concat(values, ","),
+		keyColumn,
+		concat(updates, ","))
+	return db:exec(query)
+end
+
+---Deletes a row from the table using a specific key.
+---@param tableName string # Name of the table.
+---@param keyColumn string # Column used as the key.
+---@param keyValue any # Value of the key to delete.
+local function sqliteDelete(tableName, keyColumn, keyValue)
+	assert(areStringValid(tableName, keyColumn, keyValue), Text.THROW_SQL_DELETE)
+	db:exec(format("DELETE FROM %s WHERE %s='%s';", tableName, keyColumn, keyValue:gsub("'", "''")))
 end
 
 ---Checks whether a cache (persistent or transient) contains any non-empty value.
 ---@param persistent boolean? # If true, check the persistent cache; otherwise check the transient cache.
 ---@return boolean # True if at least one entry exists and is not nil or empty, false otherwise.
 local function isCachePopulated(persistent)
-	for _, value in pairs(persistent and caches.persistent or caches.transient) do
+	local cache = persistent and caches.persistent or caches.transient
+	for _, value in pairs(cache) do
 		if not nilOrEmpty(value) then
 			return true
 		end
@@ -1308,16 +1441,18 @@ end
 ---@param persistent boolean? # Optional. If true, use persistent cache; defaults to transient.
 ---@return any # The existing or initialized value of the sub-cache.
 local function getCache(id, persistent)
-	if not id then return nil end
+	assert(id, Text.THROW_CACHE_ID)
 	return persistent and caches.persistent[id] or caches.transient[id]
 end
 
 ---Sets a sub-cache in `caches.persistent` or `caches.transient`, creating it if needed.
 ---@param id number # Unique ID of the sub-cache to set.
----@param value any # The table to store in the cache.
+---@param value any # The value to store in the cache.
 ---@param persistent boolean? # Optional. If true, use persistent cache; defaults to transient.
+---@return any # The stored value.
 local function setCache(id, value, persistent)
 	value = value or nil
+	assert(id, Text.THROW_CACHE_ID)
 	if not id then return value end
 	if persistent then
 		caches.persistent[id] = value
@@ -1346,7 +1481,7 @@ end
 local function log(lvl, id, fmt, ...)
 	if state.isLogSuspend or state.devMode < DevLevels.BASIC then return end
 
-	lvl = max(LogLevels.INFO, min(lvl, LogLevels.ERROR))
+	lvl = min(max(lvl, LogLevels.INFO), LogLevels.ERROR)
 
 	if nilOrEmpty(fmt) then
 		lvl = LogLevels.ERROR
@@ -1439,6 +1574,7 @@ end
 ---Has no effect if the ID is invalid or already cleared.
 ---@param id integer Timer ID to stop.
 local function asyncStop(id)
+	if not id then return end
 	async.timers[id] = nil
 	async.isActive = isTableValid(async.timers)
 end
@@ -1450,9 +1586,7 @@ end
 ---@param callback fun(id: integer) Function to execute each cycle.
 ---@return integer timerID Unique ID of the created timer, or -1 if invalid parameters were passed.
 local function asyncRepeat(interval, callback)
-	if not isFunction(callback) then
-		return -1
-	end
+	if not callback then return -1 end
 
 	async.idCounter = async.idCounter + 1
 
@@ -1475,9 +1609,7 @@ end
 ---@param callback fun(id: integer) Function to execute each cycle.
 ---@return integer timerID Unique ID of the created timer, or -1 if invalid parameters were passed.
 local function asyncRepeatBurst(interval, callback)
-	if not isFunction(callback) then
-		return -1
-	end
+	if not callback then return -1 end
 	local id = asyncRepeat(interval, callback)
 	callback(id)
 	return id
@@ -1488,9 +1620,7 @@ end
 ---@param callback fun(id: integer?) Function to execute once after the delay.
 ---@return integer timerID Unique ID of the created timer, or -1 if invalid parameters were passed.
 local function asyncOnce(delay, callback)
-	if not isFunction(callback) then
-		return -1
-	end
+	if not callback then return -1 end
 	return asyncRepeat(delay, function(id)
 		asyncStop(id)
 		callback(id)
@@ -1517,24 +1647,33 @@ local function getVanillaVehicleCount()
 	return setCache(0x0a00, isVersionAtMost(getGameVersion(), "2.20") and 85 or 105, true)
 end
 
----Finds the name of a vehicle based on its TweakDB ID.
+---Finds the name (including `Vehicle.` prefix) of a vehicle based on its TweakDB ID.
 ---@param tid TDBID # The TweakDB ID of the vehicle to look up.
 ---@return string? # The vehicle name if found and valid, otherwise nil.
 local function findVehicleName(tid)
-	if not tid or not isNumber(tid.hash) then return nil end
+	if not tid then return nil end
 
-	local vehicles = getPlayerVehicles()
-	for _, v in ipairs(vehicles) do
-		if v.hash == tid.hash then
-			local name = getRecordName(v)
-			if isStringValid(name) then
-				return name
+	local hash = tid.hash
+	if not hash then return nil end
+
+	local cache = getCache(0xaad0) or {}
+	if cache[hash] then return cache[hash] end
+
+	local result = getRecordName(tid)
+	if not result then
+		local vehicles = getPlayerVehicles()
+		for _, v in ipairs(vehicles) do
+			if v.hash == hash then
+				result = getRecordName(v)
+				break
 			end
-			break
 		end
 	end
+	if not result then return nil end
 
-	return getRecordName(tid)
+	cache[hash] = result
+	setCache(0xaad0, cache)
+	return result
 end
 
 ---Retrieves all appearance entries for a given vehicle name.
@@ -1546,6 +1685,9 @@ local function getVehicleApperances(name)
 		return nil
 	end
 
+	local cache = getCache(0x2bce) or {}
+	if cache[name] then return cache[name] end
+
 	local path = TweakDB:GetFlat(format("Vehicle.%s.entityTemplatePath", name))
 	if not path then return nil end
 
@@ -1556,31 +1698,12 @@ local function getVehicleApperances(name)
 	if not loader then return nil end
 
 	local resource = loader:GetResource()
-	return resource and resource.appearances or nil
-end
+	if not resource then return nil end
 
----Searches for a vehicle appearance matching a given key within a vehicle's appearances.
----@param name string # The name of the vehicle.
----@param key string # The key or prefix to match against appearance names.
----@return string? # Returns the matching appearance name if found, otherwise `nil`.
-local function findVehicleApperance(name, key)
-	local apps = getVehicleApperances(name)
-	if not isTableValid(apps) then
-		logIf(DevLevels.FULL, LogLevels.ERROR, 0x57a1, Text.LOG_ARG_OUT_OF_RANGE)
-		return nil
-	end ---@cast apps VehicleAppearance[]
-
-	for _, app in ipairs(apps) do
-		local cname = app and app.name
-		if cname then
-			local str = Game.NameToString(cname)
-			if cname and startsWith(str, key) then
-				return str
-			end
-		end
-	end
-
-	return nil
+	local result = resource.appearances
+	cache[name] = result
+	setCache(0x2bce, cache)
+	return result
 end
 
 ---Builds a map of all unique player vehicle and appearance names. Optionally skips vanilla vehicles.
@@ -1604,7 +1727,7 @@ local function getAllUniqueVehicleIdentifiers(customOnly)
 	local result = {}
 	local amount = 0
 	for i = start, length do
-		local name = TDBID.ToStringDEBUG(vehicles[i])
+		local name = getRecordName(vehicles[i])
 		if nilOrEmpty(name) then goto continue end ---@cast name string
 
 		name = name:gsub("^Vehicle%.", "")
@@ -1616,8 +1739,7 @@ local function getAllUniqueVehicleIdentifiers(customOnly)
 		local apps = getVehicleApperances(name)
 		if nilOrEmpty(apps) then goto continue end ---@cast apps table
 
-		for x = 1, #apps, 1 do
-			local raw = apps[x]
+		for _, raw in ipairs(apps) do
 			local cname = raw and raw.name or nil
 			if cname then
 				local appName = Game.NameToString(cname)
@@ -1738,7 +1860,6 @@ local function getCustomVehicleCameraID()
 
 	local ids = {}
 	local seen = {}
-
 	for _, v in ipairs(keys) do
 		--Strip known suffix.
 		local id = v:gsub("%.tppCameraPresets%$[%x]+$", "")
@@ -2012,10 +2133,7 @@ local function getCameraDefaultRotationPitch(preset, path)
 
 	local value = tonumber(TweakDB:GetFlat(key))
 	if isLow and value ~= nil then
-		local lowValue = value - 7
-		if lowValue == abs(lowValue) then
-			value = lowValue
-		end
+		value = min(max(value - 7, -45), 90)
 	end
 
 	return value or defVal
@@ -2036,7 +2154,7 @@ local function setCameraDefaultRotationPitch(preset, path, value)
 
 	--Adjust low camera.
 	if startsWith(path, "Low_") then
-		value = value - 7
+		value = min(max(value - 7, -45), 90)
 		logIf(DevLevels.FULL, LogLevels.INFO, 0x5c19, Text.LOG_PARAM_IS_LOW, key)
 	end
 
@@ -2153,13 +2271,13 @@ local function resetCustomDefaultParams(key)
 	local vtid = vehicle:GetTDBID()
 	if not vtid then return end
 
-	local vname = TDBID.ToStringDEBUG(vtid)
+	local vname = getRecordName(vtid)
 	if not vname then return end
 
 	local cptid = TweakDB:GetFlat(vname .. ".tppCameraParams")
 	if not cptid then return end
 
-	local cparam = TDBID.ToStringDEBUG(cptid)
+	local cparam = getRecordName(cptid)
 	if not cparam or contains(DefaultParams.Keys, cparam) then return end
 
 	local baseKey = DefaultParams.Keys[contains(cparam:lower(), "_2w_") and 2 or 1]
@@ -2235,8 +2353,9 @@ local function restoreAllCustomCameraData()
 	end
 
 	presets.restoreParams = {}
-	setCache(0xf5d6, nil, true) --resetCustomDefaultParams
-	setCache(0x810b, nil, true) --resetCustomCameraVars
+
+	setCache(0xf5d6, nil, true) --Clear `resetCustomDefaultParams` cache.
+	setCache(0x810b, nil, true) --Clear `resetCustomCameraVars` cache.
 end
 
 --#endregion
@@ -2409,7 +2528,6 @@ local function getOffsetData(preset, fallback, level)
 	local y = tonumber(p and p.y or f.y) or 0
 	local z = tonumber(p and p.z or f.z) or ({ Close = 1.115, Medium = 1.65, Far = 2.25 })[level]
 	local d = tonumber(p and p.d or f.d) or ({ Close = 0, Medium = 1.5, Far = 4 })[level]
-
 	return a, x, y, z, d
 end
 
@@ -2448,9 +2566,9 @@ local function applyPreset(preset, id)
 
 		--Tracks usage statistics.
 		local usage = presets.usage[key] or {}
+		usage.Total = (usage.Total or 0) + 1
 		usage.Last = os.time()
 		usage.First = usage.First or usage.Last
-		usage.Total = usage.Total and (usage.Total + 1) or 1
 		presets.usage[key] = usage
 		presets.isUsageUnsaved = true
 		return
@@ -2584,7 +2702,6 @@ local function getPresetFilePath(name, status)
 	else
 		path = PresetFolders.CUSTOM
 	end
-
 	return combine(path, ensureLuaExt(name))
 end
 
@@ -2612,6 +2729,101 @@ local function presetFileExists(name, isDefault)
 	end
 
 	return false
+end
+
+---Saves a camera preset to file, either as a regular preset or as a default.
+---It serializes only values that differ from the default (unless saving as default).
+---@param name string # The name of the preset file (with or without `.lua` extension).
+---@param preset table # The preset data to save (must include an `ID` and valid offset data).
+---@param allowOverwrite boolean? # Whether existing files may be overwritten.
+---@param forceDefault boolean? # If true, saves the preset to the `defaults` directory instead of `presets`.
+---@return boolean # True on success, or false if writing failed or nothing needed to be saved.
+local function savePreset(name, preset, allowOverwrite, forceDefault)
+	if not isStringValid(name) or not isTableValid(preset) then return false end
+
+	local status = getVehicleStatus()
+	local isVanilla = status == 0 or status == 1
+	local path = combine(
+		forceDefault and PresetFolders.DEFAULTS or
+		isVanilla and PresetFolders.VANILLA or
+		PresetFolders.CUSTOM, ensureLuaExt(name))
+	if not isStringValid(path) then return false end
+
+	--To always save all values, as the currently retrieved defaults may change in future.
+	local isCustom = preset.ID == getCustomVehicleCameraID()
+
+	if not allowOverwrite and not isCustom then
+		local check = io.open(path, "r")
+		if check then
+			check:close()
+			log(LogLevels.WARN, 0x8515, Text.LOG_PSET_FILE_EXIST, path)
+			return false
+		end
+	end
+
+	local default = getDefaultPreset(preset) or {}
+	local save = false
+	local parts = { "return{" }
+	insert(parts, format("ID=%q,", preset.ID))
+	for _, mode in ipairs(PresetInfo.Levels) do
+		local p = preset[mode]
+		local d = default[mode]
+		local sub = {}
+
+		if isTable(p) then
+			d = isTable(d) and d or {}
+			for _, k in ipairs(PresetInfo.Offsets) do
+				if isCustom or forceDefault or equals(p[k], d[k]) then
+					save = true
+					insert(sub, format("%s=%s", k, serialize(p[k] or d[k])))
+				end
+			end
+		end
+
+		if #sub > 0 then
+			insert(parts, format("%s={%s},", mode, concat(sub, ",")))
+		end
+	end
+
+	if not save then
+		log(LogLevels.WARN, 0x8515, Text.LOG_PSET_NOT_CHANGED, path, default.ID)
+
+		if not forceDefault then
+			local ok, err = os.remove(path)
+			if ok then
+				logF(DevLevels.ALERT, LogLevels.WARN, 0x8515, Text.LOG_PSET_DELETED, path)
+			else
+				logF(DevLevels.FULL, LogLevels.ERROR, 0x8515, Text.LOG_PSET_DEL_FAIL, path, err)
+			end
+			return ok and setPresetEntry(name)
+		end
+
+		return false
+	end
+
+	if forceDefault then
+		insert(parts, "IsDefault=true")
+	elseif isVanilla then
+		insert(parts, "IsVanilla=true")
+	end
+
+	local last = parts[#parts]
+	if last and last:sub(-1) == "," then
+		parts[#parts] = last:sub(1, -2)
+	end
+
+	insert(parts, "}")
+
+	local file = io.open(path, "w")
+	if not file then
+		return false
+	end
+	file:write(concat(parts))
+	file:close()
+
+	logF(DevLevels.ALERT, LogLevels.INFO, 0x8515, Text.LOG_PSET_SAVED, path)
+
+	return true
 end
 
 ---Removes camera presets from the global `presets.collection ` table.
@@ -2743,7 +2955,6 @@ local function loadPresetsFrom(path)
 			return
 		end
 
-		task.IsActive = true
 		task.StartTime = os.clock()
 		task.EndTime = task.StartTime
 		task.Duration = task.Duration or 0
@@ -2800,7 +3011,12 @@ local function loadPresetsFrom(path)
 			state.isLogSuspend = false
 
 			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_CUS, count, length, duration)
-			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_IGNO, length - count)
+
+			local ignored = length - count
+			if ignored > 0 then
+				logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_IGNO, ignored)
+			end
+
 			logF(DevLevels.ALERT, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_DONE, task.Duration)
 
 			task.Duration = 0
@@ -2823,6 +3039,7 @@ end
 local function loadPresets(refresh, delay)
 	if refresh then purgePresets() end
 
+	presets.loaderTask.IsActive = true
 	delay = abs(isNumber(delay) and delay or 0)
 	asyncOnce(delay, function()
 		loadPresetsFrom(PresetFolders.DEFAULTS)
@@ -2831,179 +3048,114 @@ local function loadPresets(refresh, delay)
 	end)
 end
 
----Saves a camera preset to file, either as a regular preset or as a default.
----It serializes only values that differ from the default (unless saving as default).
----@param name string # The name of the preset file (with or without `.lua` extension).
----@param preset table # The preset data to save (must include an `ID` and valid offset data).
----@param allowOverwrite boolean? # Whether existing files may be overwritten.
----@param forceDefault boolean? # If true, saves the preset to the `defaults` directory instead of `presets`.
----@return boolean # True on success, or false if writing failed or nothing needed to be saved.
-local function savePreset(name, preset, allowOverwrite, forceDefault)
-	if not isStringValid(name) or not isTableValid(preset) then return false end
-
-	local status = getVehicleStatus()
-	local isVanilla = status == 0 or status == 1
-	local path = combine(
-		forceDefault and PresetFolders.DEFAULTS or
-		isVanilla and PresetFolders.VANILLA or
-		PresetFolders.CUSTOM, ensureLuaExt(name))
-	if not isStringValid(path) then return false end
-
-	--To always save all values, as the currently retrieved defaults may change in future.
-	local isCustom = preset.ID == getCustomVehicleCameraID()
-
-	if not allowOverwrite and not isCustom then
-		local check = io.open(path, "r")
-		if check then
-			check:close()
-			log(LogLevels.WARN, 0x8515, Text.LOG_PSET_FILE_EXIST, path)
-			return false
-		end
-	end
-
-	local default = getDefaultPreset(preset) or {}
-	local save = false
-	local parts = { "return{" }
-	insert(parts, format("ID=%q,", preset.ID))
-	for _, mode in ipairs(PresetInfo.Levels) do
-		local p = preset[mode]
-		local d = default[mode]
-		local sub = {}
-
-		if isTable(p) then
-			d = isTable(d) and d or {}
-			for _, k in ipairs(PresetInfo.Offsets) do
-				if isCustom or forceDefault or not equals(p[k], d[k]) then
-					save = true
-					insert(sub, format("%s=%s", k, serialize(p[k])))
-				end
-			end
-		end
-
-		if #sub > 0 then
-			insert(parts, format("%s={%s},", mode, concat(sub, ",")))
-		end
-	end
-
-	if not save then
-		log(LogLevels.WARN, 0x8515, Text.LOG_PSET_NOT_CHANGED, path, default.ID)
-
-		if not forceDefault then
-			local ok, err = os.remove(path)
-			if ok then
-				logF(DevLevels.ALERT, LogLevels.WARN, 0x8515, Text.LOG_PSET_DELETED, path)
-			else
-				logF(DevLevels.FULL, LogLevels.ERROR, 0x8515, Text.LOG_PSET_DEL_FAIL, path, err)
-			end
-			return ok and setPresetEntry(name)
-		end
-
-		return false
-	end
-
-	if forceDefault then
-		insert(parts, "IsDefault=true")
-	elseif isVanilla then
-		insert(parts, "IsVanilla=true")
-	end
-
-	local last = parts[#parts]
-	if last and last:sub(-1) == "," then
-		parts[#parts] = last:sub(1, -2)
-	end
-
-	insert(parts, "}")
-
-	local file = io.open(path, "w")
-	if not file then
-		return false
-	end
-	file:write(concat(parts))
-	file:close()
-
-	logF(DevLevels.ALERT, LogLevels.INFO, 0x8515, Text.LOG_PSET_SAVED, path)
-
-	return true
-end
-
----Loads preset usage statistics from `.usage.lua`.
-local function loadPresetUsage()
-	local path = ".usage.lua"
-	if not fileExists(path) then
-		--Rename outdated file.
-		local outdated = trimLuaExt(path)
-		if fileExists(outdated) then
-			local ok, _ = os.rename(outdated, path)
-			if not ok then path = outdated end
-		end
-	end
-
-	local chunk = loadfile(path)
-	if not chunk then return end
-
-	local ok, data = pcall(chunk)
-	if ok and isTable(data) then
-		presets.usage = data
-		return
-	end
-end
-
----Saves the `presets.usage` table to `.usage.lua` on disk.
+---Saves the `presets.usage` table to `db.sqlite3` on disk.
 local function savePresetUsage()
 	if not presets.isUsageUnsaved then return end
 	presets.isUsageUnsaved = false
 
 	if not isTableValid(presets.usage) then return end
 
-	--Removes outdated backup file.
-	local backup = ".usage.bak"
-	if fileExists(backup) then
-		pcall(os.remove, backup)
+	sqliteInit(
+		"PresetUsage",
+		"Name TEXT PRIMARY KEY",
+		"First INTEGER",
+		"Last INTEGER",
+		"Total INTEGER"
+	)
+
+	sqliteBegin()
+
+	--Load current DB values.
+	local database = {}
+	local rows = sqliteRows("PresetUsage", "Name, First, Last, Total")
+	for _, row in ipairs(rows) do
+		local key, first, last, total = unpack(row)
+		database[key] = {
+			First = first,
+			Last = last,
+			Total = total
+		}
 	end
 
-	local cleaned = {}
-	for name, usage in pairs(presets.usage) do
-		if presets.collection[name] then
-			cleaned[name] = usage
+	--Bulk delete outdated entries.
+	local doVacuum = false
+	for name in pairs(database) do
+		if not presets.collection[name] then
+			doVacuum = true
+			presets.usage[name] = nil
+			sqliteDelete("PresetUsage", "Name", name)
 		end
 	end
-	presets.usage = cleaned
 
-	local path = ".usage.lua"
-	if nilOrEmpty(cleaned) then
-		if fileExists(path) then
-			pcall(os.remove, path)
+	--Update only changed entries.
+	for name, current in pairs(presets.usage) do
+		local previous = database[name]
+		if not equals(previous, current) then
+			sqliteUpsert("PresetUsage", "Name", {
+				Name = name,
+				First = current.First,
+				Last = current.Last,
+				Total = current.Total
+			})
 		end
-		return
 	end
 
-	local file = io.open(path, "w")
-	if file then
-		file:write("return" .. serialize(cleaned))
-		file:close()
+	sqliteCommit()
+
+	if doVacuum then
+		sqliteVacuum()
 	end
 end
 
----Loads settings from a JSON file and applies them.
----@param path string? Optional file path.
-local function loadGlobalOptions(path)
-	path = isStringValid(path) and path or ".globals.json"
-
-	local file = io.open(path, "r")
-	if not file then return end
-
-	local content = file:read("*a")
-	file:close()
-	if nilOrEmpty(content) then return end
-
-	local ok, result = pcall(json.decode, content)
-	if not ok or not isTableValid(result) then return end
-
-	for varName, data in pairs(config.options) do
-		local item = result[varName]
-		if item and item.Value then
-			data.Value = item.Value
+---Loads preset usage statistics from `db.sqlite3`.
+local function loadPresetUsage()
+	--OBSOLETE - START
+	--This code block will be removed in future.
+	local paths = {
+		".usage.lua",
+		".usage.lua.bak",
+		".usage",
+		".usage.bak"
+	}
+	local loaded = false
+	for _, path in ipairs(paths) do
+		if not loaded and fileExists(path) then
+			local chunk = loadfile(path)
+			if chunk then
+				local ok, data = pcall(chunk)
+				if ok and isTable(data) then
+					presets.usage = data
+				end
+				pcall(os.remove, path)
+			end
+			presets.isUsageUnsaved = true
+			savePresetUsage()
 		end
+
+		if loaded then
+			pcall(os.remove, path)
+		end
+	end
+	--OBSOLETE - END
+
+	sqliteInit(
+		"PresetUsage",
+		"Name TEXT PRIMARY KEY",
+		"First INTEGER",
+		"Last INTEGER",
+		"Total INTEGER"
+	)
+
+	--Load DB values.
+	presets.usage = {}
+	local rows = sqliteRows("PresetUsage", "Name, First, Last, Total")
+	for _, row in ipairs(rows) do
+		local key, first, last, total = unpack(row)
+		presets.usage[key] = {
+			First = first,
+			Last = last,
+			Total = total
+		}
 	end
 end
 
@@ -3020,12 +3172,6 @@ local function saveGlobalOptions()
 			pcall(os.remove, path)
 		end
 		return
-	end
-
-	--Removes outdated backup file.
-	local backup = path .. ".bak"
-	if fileExists(backup) then
-		pcall(os.remove, backup)
 	end
 
 	local relevantData = {}
@@ -3050,6 +3196,29 @@ local function saveGlobalOptions()
 	if file then
 		file:write(json.encode(relevantData))
 		file:close()
+	end
+end
+
+---Loads settings from a JSON file and applies them.
+---@param path string? Optional file path.
+local function loadGlobalOptions(path)
+	path = isStringValid(path) and path or ".globals.json"
+
+	local file = io.open(path, "r")
+	if not file then return end
+
+	local content = file:read("*a")
+	file:close()
+	if nilOrEmpty(content) then return end
+
+	local ok, result = pcall(json.decode, content)
+	if not ok or not isTableValid(result) then return end
+
+	for varName, data in pairs(config.options) do
+		local item = result[varName]
+		if item and item.Value then
+			data.Value = item.Value
+		end
 	end
 end
 
@@ -3168,7 +3337,7 @@ local function replaceEditorPreset(src, dest, verify)
 	dest.Token = getEditorPresetToken(preset)
 	dest.IsPresent = verify and presetFileExists(src.Key) or false
 
-	local cache = getCache(0xcb3d) --onDraw
+	local cache = getCache(0xcb3d) --Get `onDraw` cache.
 	if cache then
 		cache.key = nil
 	end
@@ -3541,7 +3710,7 @@ local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	return result
 end
 
----Adds a button to open the Global Parameters window and returns the current window geometry if clicked.
+---Adds a button to open the Global Settings window and returns the current window geometry if clicked.
 ---@param controlPadding number # Left padding used to center content within the window.
 ---@param halfHeightPadding number # Padding below the button.
 ---@param buttonWidth number # Width of the button.
@@ -3568,7 +3737,7 @@ local function addGlobalOptionsButton(controlPadding, halfHeightPadding, buttonW
 	return x, y, w, h
 end
 
----Draws and manages the Global Parameters window.
+---Draws and manages the Global Settings window.
 ---@param scale number # UI scale factor based on current DPI and font size.
 ---@param controlPadding number # Left padding used to center content within the window.
 ---@param heightPadding number # Height padding used to center content within the window.
@@ -3713,12 +3882,12 @@ local function openFileExplorerWindow(scale, controlPadding, halfHeightPadding, 
 		[2] = PresetFolders.CUSTOM
 	}
 	local files = cache.files or {}
-	local total = cache.total or 0
+	local dirCount = cache.dirCount or 0
 	if not isTableValid(files) then
 		for i, location in ipairs(dirs) do
 			local entries = dir(location)
 			if entries then
-				total = total + 1
+				dirCount = dirCount + 1
 				for _, entry in ipairs(entries) do
 					local name = entry.name
 					if name and hasLuaExt(name) then
@@ -3727,10 +3896,13 @@ local function openFileExplorerWindow(scale, controlPadding, halfHeightPadding, 
 				end
 			end
 		end
+		cache.dirs = dirs
+		cache.dirCount = dirCount
+		cache.files = files
 		setCache(0x970b, cache, true)
 	end
 
-	if total ~= #dirs then
+	if dirCount ~= #dirs then
 		explorer.isOpen = false
 		logF(DevLevels.FULL, LogLevels.ERROR, 0x970b, Text.LOG_PSETS_DIR_MISS)
 		return
@@ -3771,14 +3943,19 @@ local function openFileExplorerWindow(scale, controlPadding, halfHeightPadding, 
 		end
 		ImGui.PopItemWidth()
 
-		addTooltip(nil,
-			split(format(Text.GUI_FEXP_SEARCH_TIP,
+		local cmds = cache.commands
+		if not cmds then
+			cmds = split(format(Text.GUI_FEXP_SEARCH_TIP,
 				ExplorerCommands.INSTALLED,
 				ExplorerCommands.MODDED,
 				ExplorerCommands.UNAVAILABLE,
 				ExplorerCommands.ACTIVE,
 				ExplorerCommands.INACTIVE,
-				ExplorerCommands.VANILLA), "|"))
+				ExplorerCommands.VANILLA), "|")
+			cache.commands = cmds
+			setCache(0x970b, cache, true)
+		end
+		addTooltip(nil, cmds)
 
 		ImGui.EndTable()
 	end
@@ -3899,8 +4076,6 @@ local function openFileExplorerWindow(scale, controlPadding, halfHeightPadding, 
 						clearLastEditorBundle()
 					end
 
-					savePresetUsage()
-
 					logF(DevLevels.ALERT, LogLevels.INFO, 0x970b, Text.LOG_PSET_DELETED, f)
 
 					setCache(0x970b, nil, true)
@@ -3944,6 +4119,7 @@ local function onInit()
 	local task = presets.loaderTask
 	if not isFunction(task.Finalizer) then
 		task.Finalizer = function()
+			resetCache(true)
 			clearLastEditorBundle()
 			resetCache()
 			applyPreset()
@@ -4071,7 +4247,7 @@ registerForEvent("onInit", function()
 	--When the player enters a vehicle. This event also fires
 	--every few seconds for no apparent reason, so it's essential
 	--to ensure the code runs only once when entering a vehicle.
-	Observe("VehicleComponent", "OnMountingEvent", function(_)
+	Observe("VehicleComponent", "OnMountingEvent", function()
 		if not state.isModEnabled or not isVehicleMounted() or isCachePopulated() then
 			return
 		end
@@ -4081,16 +4257,16 @@ registerForEvent("onInit", function()
 	end)
 
 	--When the player unmounts from a vehicle, reset to default camera offsets.
-	Observe("VehicleComponent", "OnUnmountingEvent", function(_)
+	Observe("VehicleComponent", "OnUnmountingEvent", function()
 		if isVehicleMounted() then
 			logIf(DevLevels.ALERT, LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_UMNT_FAIL)
 			return
 		end
-		onUnmount(false)
+		onUnmount()
 	end)
 
 	--When the game returns to the main menu, ensure any active vehicle camera presets are reset.
-	Observe("QuestTrackerGameController", "OnUninitialize", function() onUnmount(false) end)
+	Observe("QuestTrackerGameController", "OnUninitialize", function() onUnmount() end)
 
 	--While the loading screen is active, but also triggers
 	--once when the user confirms it at the end with a key press.
@@ -4145,11 +4321,30 @@ registerForEvent("onInit", function()
 		end)
 	end)
 
-	--When Photo Mode is activated.
-	Observe("gameuiPhotoModeMenuController", "OnShow", function() gui.isOverlayLocked = true end)
-
-	--When Photo Mode is closed.
-	Observe("gameuiPhotoModeMenuController", "OnHide", function() gui.isOverlayLocked = false end)
+	--Registers menu event observers and maps them to GUI state updates.
+	local function lockOverlay() gui.isOverlayLocked = true end
+	local function unlockOverlay() gui.isOverlayLocked = false end
+	local function resetMetrics() gui.doMetricsReset = true end
+	local menuObservers = {
+		gameuiPhotoModeMenuController = {
+			OnShow = lockOverlay,
+			OnHide = unlockOverlay
+		},
+		MenuScenario_Settings = {
+			OnSettingsBack = resetMetrics
+		},
+		MenuScenario_PauseMenu = {
+			GoBack = resetMetrics
+		},
+		MenuScenario_DeathMenu = {
+			GoBack = resetMetrics
+		}
+	}
+	for scenario, events in pairs(menuObservers) do
+		for event, handler in pairs(events) do
+			Observe(scenario, event, handler)
+		end
+	end
 end)
 
 --Detects when the CET overlay is opened.
@@ -4163,7 +4358,7 @@ registerForEvent("onOverlayClose", function()
 	config.isOpen = false
 	explorer.isOpen = false
 	explorer.searchText = ExplorerCommands.INSTALLED
-	setCache(0x970b, nil, true) --openFileExplorerWindow
+	setCache(0x970b, nil, true) --Clear `openFileExplorerWindow` cache.
 	saveGlobalOptions()
 end)
 
@@ -4240,11 +4435,15 @@ registerForEvent("onDraw", function()
 			onUnmount(true)
 			onShutdown()
 			purgePresets()
-			resetCache()
+
 			editor.bundles = {}
 			presets.usage = {}
 			state.devMode = DevLevels.DISABLED
+
 			logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_MOD_OFF)
+
+			resetCache(false)
+			resetCache(true)
 		end
 	end
 	ImGui.Dummy(0, halfHeightPadding)
@@ -4281,6 +4480,9 @@ registerForEvent("onDraw", function()
 	local devMode = ImGui.SliderInt(Text.GUI_DMODE, state.devMode, DevLevels.DISABLED, DevLevels.FULL)
 	if devMode ~= state.devMode then
 		state.devMode = min(max(devMode, DevLevels.DISABLED), DevLevels.FULL)
+		if state.devMode == DevLevels.DISABLED then
+			resetCache(true)
+		end
 	end
 	gui.isPaddingLocked = ImGui.IsItemActive()
 	addTooltip(scale, Text.GUI_DMODE_TIP)
@@ -4323,46 +4525,40 @@ registerForEvent("onDraw", function()
 		function()
 			key = cache.key
 			if isString(key) then return key end
-
 			key = name ~= appName and findPresetKey(name, appName) or findPresetKey(name) or name
-			cache.key = key
-
 			if not key then
 				log(LogLevels.ERROR, 0xcb3d, Text.LOG_CAM_ID_MISS)
 			end
-
+			cache.key = key
+			setCache(0xcb3d, cache)
 			return key
 		end,
 		function()
 			displayName = cache.displayName
 			if isString(displayName) then return displayName end
-
 			displayName = getVehicleDisplayName() or Text.GUI_NONE
 			cache.displayName = displayName
-
+			setCache(0xcb3d, cache)
 			return displayName
 		end,
 		function()
 			status = cache.status
 			if isString(status) then return status end
-
 			status = getVehicleStatus()
 			cache.status = status
-
+			setCache(0xcb3d, cache)
 			return status
 		end,
 		function()
 			statusText = cache.statusText
 			if isString(status) then return status end
-
 			statusText = ({
 				[0] = Text.GUI_TBL_VAL_STATUS_0,
 				[1] = Text.GUI_TBL_VAL_STATUS_1,
 				[2] = Text.GUI_TBL_VAL_STATUS_2
 			})[status] or Text.GUI_NONE
-
 			cache.statusText = statusText
-
+			setCache(0xcb3d, cache)
 			return statusText
 		end
 	}
@@ -4374,8 +4570,6 @@ registerForEvent("onDraw", function()
 			break
 		end
 	end
-
-	setCache(0xcb3d, cache)
 
 	if failed then
 		state.isLogSuspend = true
@@ -4433,32 +4627,33 @@ registerForEvent("onDraw", function()
 		ImGui.TableSetupColumn("\u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
+		local equNames = name == appName
 		local customID = getCustomVehicleCameraID()
 		local rows = {
 			{ label = "\u{f0208}", tip = Text.GUI_TBL_LABL_DNAME_TIP,  value = displayName },
 			{ label = "\u{f1975}", tip = Text.GUI_TBL_LABL_STATUS_TIP, value = statusText },
 			{ label = "\u{f010b}", tip = Text.GUI_TBL_LABL_VEH_TIP,    value = name },
-			{ label = "\u{f07ac}", tip = Text.GUI_TBL_LABL_APP_TIP,    value = appName },
-			{ label = "\u{f0567}", tip = Text.GUI_TBL_LABL_CAMID_TIP,  value = id },
+			{ label = "\u{f07ac}", tip = Text.GUI_TBL_LABL_APP_TIP,    value = appName,    isDisabled = equNames },
+			{ label = "\u{f0567}", tip = Text.GUI_TBL_LABL_CAMID_TIP,  value = id,         isDisabled = id == customID },
 			{
-				label  = "\u{f0569}",
-				tip    = Text.GUI_TBL_LABL_CCAMID_TIP,
-				value  = customID,
-				valTip = Text.GUI_TBL_VAL_CCAMID_TIP,
-				custom = isStringValid(customID)
+				label      = "\u{f0569}",
+				tip        = Text.GUI_TBL_LABL_CCAMID_TIP,
+				value      = customID,
+				valTip     = Text.GUI_TBL_VAL_CCAMID_TIP,
+				isCustomID = isStringValid(customID)
 			},
 			{
-				label    = "\u{f1952}",
-				tip      = Text.GUI_TBL_LABL_PSET_TIP,
-				value    = presetName,
-				valTip   = Text.GUI_TBL_VAL_PSET_TIP,
-				editable = true
+				label      = "\u{f1952}",
+				tip        = Text.GUI_TBL_LABL_PSET_TIP,
+				value      = presetName,
+				valTip     = equNames and Text.GUI_TBL_VAL_PSET_TIP2 or Text.GUI_TBL_VAL_PSET_TIP1,
+				isEditable = true
 			}
 		}
 
 		local maxInputWidth = floor(max(16, (contentWidth - 38)) * scale)
 		for _, row in ipairs(rows) do
-			if not areString(row.label, row.value) then goto continue end
+			if row.isDisabled or not areString(row.label, row.value) then goto continue end
 
 			ImGui.TableNextRow(0, rowHeight)
 			ImGui.TableSetColumnIndex(0)
@@ -4469,21 +4664,28 @@ registerForEvent("onDraw", function()
 
 			ImGui.TableSetColumnIndex(1)
 
-			if row.custom then
+			if row.isCustomID then
 				alignNext(rowHeight)
 				ImGui.Text(row.value)
 
-				local camMap = getVehicleCameraMap()
-				if isTableValid(camMap) then ---@cast camMap table<string, string>
-					local list = split(row.valTip, "|") or {}
-					for _, v in ipairs(CameraData.Levels) do
-						local cam = camMap[v]
-						insert(list, v .. ":")
-						insert(list, cam and cam or "\u{f0026} " .. Text.GUI_NONE)
+				local tip = cache.customIDTip
+				if not tip then
+					local camMap = getVehicleCameraMap()
+					if isTableValid(camMap) then ---@cast camMap table<string, string>
+						tip = split(row.valTip, "|") or {}
+						for _, v in ipairs(CameraData.Levels) do
+							local cam = camMap[v]
+							insert(tip, v .. ":")
+							insert(tip, cam and cam or "\u{f0026} " .. Text.GUI_NONE)
+						end
+						cache.customIDTip = tip
+						setCache(0xcb3d, cache)
 					end
-					addTooltip(nil, list)
 				end
-			elseif row.editable then
+				if isTableValid(tip) then
+					addTooltip(nil, tip)
+				end
+			elseif row.isEditable then
 				local namWidth = min(ImGui.CalcTextSize(name), 302)
 				local appWidth = min(ImGui.CalcTextSize(appName), 302)
 				local maxWidth = max(namWidth, appWidth)
@@ -4521,14 +4723,31 @@ registerForEvent("onDraw", function()
 				popColors(pushd)
 				ImGui.PopItemWidth()
 
-				addTooltip(scale, format(
-					row.valTip,
-					color == Colors.CARAMEL and flux.Name or key,
-					name,
-					appName,
-					chopUnderscoreParts(name),
-					chopUnderscoreParts(appName)
-				))
+				cache.renameTip = cache.renameTip or {}
+				local tipKey = equNames and name or appName
+				local tip = cache.renameTip[tipKey]
+				if not tip then
+					if equNames then
+						tip = format(
+							row.valTip,
+							color == Colors.CARAMEL and flux.Name or key,
+							name,
+							chopUnderscoreParts(name)
+						)
+					else
+						tip = format(
+							row.valTip,
+							color == Colors.CARAMEL and flux.Name or key,
+							name,
+							appName,
+							chopUnderscoreParts(name),
+							chopUnderscoreParts(appName)
+						)
+					end
+					cache.renameTip[tipKey] = tip
+					setCache(0xcb3d, cache)
+				end
+				addTooltip(scale, tip)
 			else
 				alignNext(rowHeight)
 
@@ -4741,7 +4960,31 @@ end)
 
 --#endregion
 
---#region 📟 Console Commands
+--#region 📟 Console Commands (OBSOLETE: code will be removed in future)
+
+---Searches for a vehicle appearance matching a given key within a vehicle's appearances.
+---@param name string # The name of the vehicle.
+---@param key string # The key or prefix to match against appearance names.
+---@return string? # Returns the matching appearance name if found, otherwise `nil`.
+local function findVehicleApperance(name, key)
+	local apps = getVehicleApperances(name)
+	if not isTableValid(apps) then
+		logIf(DevLevels.FULL, LogLevels.ERROR, 0x57a1, Text.LOG_ARG_OUT_OF_RANGE)
+		return nil
+	end ---@cast apps VehicleAppearance[]
+
+	for _, app in ipairs(apps) do
+		local cname = app and app.name or nil
+		if cname then
+			local str = Game.NameToString(cname)
+			if startsWith(str, key) then
+				return str
+			end
+		end
+	end
+
+	return nil
+end
 
 ---Moves vanilla preset files to the correct folder and updates their metadata.
 ---This command is intended for users who only create their own presets.
@@ -4754,6 +4997,9 @@ local function repairVanillaPresetFilesAsyncTask()
 	if getCache(0x997f, true) then return end
 	setCache(0x997f, true, true)
 
+	state.isModEnabled = false
+	state.devMode = DevLevels.DISABLED
+
 	local files = {}
 	local entries = dir(PresetFolders.CUSTOM)
 	if entries then
@@ -4765,6 +5011,7 @@ local function repairVanillaPresetFilesAsyncTask()
 		end
 	end
 
+	local anyMoved = false
 	local index, file
 	local vehicles = getPlayerVehicles()
 	local length = getVanillaVehicleCount()
@@ -4774,13 +5021,19 @@ local function repairVanillaPresetFilesAsyncTask()
 		if not file then
 			asyncStop(id)
 
-			editor.bundles = {}
-			resetCache()
-			restoreAllPresets()
-			loadPresets(true)
-			applyPreset()
+			resetCache(false)
+			resetCache(true)
 
-			setCache(0x997f, false, true)
+			state.isModEnabled = true
+			if anyMoved then
+				restoreAllPresets()
+				loadPresets(true)
+				applyPreset()
+			else
+				state.isLogSuspend = false
+				logF(DevLevels.BASIC, LogLevels.INFO, 0x997f, "No vanilla presets were found in the wrong folder.")
+			end
+
 			return
 		end
 
@@ -4788,8 +5041,8 @@ local function repairVanillaPresetFilesAsyncTask()
 		for i = 1, length do
 			local name = findVehicleName(vehicles[i])
 			if isStringValid(name) then ---@cast name string
-				local search = "Vehicle." .. key
-				if startsWith(name, search) or findVehicleApperance(name, key) ~= nil then
+				name = name:gsub("^Vehicle%.", "")
+				if startsWith(name, key) or findVehicleApperance(name, key) ~= nil then
 					local path = getPresetFilePath(key, 2)
 					local chunk, _ = loadfile(path)
 					if not chunk then break end
@@ -4797,11 +5050,21 @@ local function repairVanillaPresetFilesAsyncTask()
 					local ok, result = pcall(chunk)
 					if not ok or not result or not isStringValid(result.ID) then break end
 
-					setCache(0xddf2, 1) --fakes vanilla vehicle status via cache
-					savePreset(key, result, true)
-					setCache(0xddf2, nil) --remove fake
+					state.isLogSuspend = false
+					logF(DevLevels.BASIC, LogLevels.INFO, 0x997f, "Found vanilla preset: '%s'.", key)
 
-					pcall(os.remove, path)
+					result.IsVanilla = true
+
+					local newPath = getPresetFilePath(key, 1)
+					local newFile = io.open(newPath, "w")
+					if not newFile then break end
+
+					newFile:write("return" .. serialize(result))
+					newFile:close()
+
+					os.remove(path)
+
+					anyMoved = true
 					break
 				end
 			end
@@ -4809,9 +5072,25 @@ local function repairVanillaPresetFilesAsyncTask()
 	end)
 end
 
+--GetMod('ThirdPersonVehicleCameraTool').Help()
 return {
-	---Command: GetMod("ThirdPersonVehicleCameraTool").RepairVanillaPresets()
-	RepairVanillaPresets = repairVanillaPresetFilesAsyncTask
+	Help = function()
+		local name = "ThirdPersonVehicleCameraTool"
+		print(" ")
+		print(format("%s commands:", name))
+		print("  RepairVanillaPresets: Moves vanilla preset files to the correct folder and updates their metadata.")
+		print("  ShowPermCache: Displays the persistent cache contents in a readable format.")
+		print("  ShowTempCache: Displays the transient (temporary) cache contents in a readable format.")
+		print(" ")
+		print("Usage example:")
+		print(format("  GetMod('%s').RepairVanillaPresets()", name))
+		print(format("  GetMod('%s').ShowPermCache()", name))
+		print(format("  GetMod('%s').ShowTempCache()", name))
+		print(" ")
+	end,
+	RepairVanillaPresets = repairVanillaPresetFilesAsyncTask,
+	ShowPermCache = function() print(serialize(caches.persistent, true)) end,
+	ShowTempCache = function() print(serialize(caches.transient, true)) end
 }
 
 --#endregion

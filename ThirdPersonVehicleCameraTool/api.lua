@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-09-27, 23:05 UTC+01:00 (MEZ)
+Version: 2025-10-02, 08:14 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -208,27 +208,33 @@ Vector3 = Vector3
 json = json
 
 ---Provides version information about the currently running CET environment.
----@class GetVersion # Not a class — global function only.
+---@class GetVersion # Not a class — provided by CET.
 ---@field GetVersion fun(): string # Returns the runtime version as a string, typically formatted like "v1.2.3.4".
 GetVersion = GetVersion
 
 ---Provides functionality to observe game events, allowing custom functions to be executed when certain events occur.
----@class Observe # Not a class — global function only.
+---@class Observe # Not a class — provided by CET.
 ---@field Observe fun(className: string, functionName: string, callback: fun(...)) # Sets up an observer for a specified function within the game.
 Observe = Observe
 
 ---Allows the registration of functions to be executed when certain game events occur, such as initialization or shutdown.
----@class registerForEvent # Not a class — global function only.
+---@class registerForEvent # Not a class — provided by CET.
 ---@field registerForEvent fun(eventName: string, callback: fun(...)) # Registers a callback function for a specified event (e.g., `onInit`, `onIsDefault`).
 registerForEvent = registerForEvent
 
 ---Provides logging functionality, allowing messages to be printed to the console or log files for debugging purposes.
----@class spdlog # Not a class — global function only.
+---@class spdlog # Not a class — provided by CET.
 ---@field info fun(message: string) # Logs an informational message, typically used for general debug output.
 ---@field error fun(message: string) # Logs an error message, usually when something goes wrong.
 spdlog = spdlog
 
+---SQLite database handle.
+---@class db # Not a class — provided by CET.
+---@field exec fun(self: db, sql: string): boolean?, string? # Executes a SQL statement. Returns true on success, or nil and an error message.
+---@field rows fun(self: db, sql: string): fun(): table # Executes a SELECT statement and returns an iterator. Each yielded row is an array (table) of column values.
+db = db
+
 ---Scans a directory and returns its contents.
----@class dir # Not a class — global function only.
+---@class dir # Not a class — provided by CET.
 ---@field dir fun(path: string): table # Returns a list of file/folder entries in the specified directory. Each entry is a table with at least a `name` field.
 dir = dir

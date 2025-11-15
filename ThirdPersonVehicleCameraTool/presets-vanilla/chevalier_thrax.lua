@@ -1,1 +1,1 @@
-return{ID="4w_Limo_Thrax",Close={a=nil,x=nil,y=-0.3,z=nil,d=0.1},Medium={a=nil,x=nil,y=-0.3,z=nil,d=1.3},Far={a=nil,x=nil,y=-0.3,z=nil,d=4.3},IsVanilla=true}
+return{ID="4w_Limo_Thrax",Close={y=-0.3,d=0.1},Medium={y=-0.3,d=1.3},Far={y=-0.3,d=4.3},IsVanilla=true}

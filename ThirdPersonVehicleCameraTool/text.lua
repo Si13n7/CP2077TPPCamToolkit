@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-09-27, 23:05 UTC+01:00 (MEZ)
+Version: 2025-10-02, 08:14 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -62,7 +62,8 @@ return {
 	GUI_TBL_VAL_STATUS_1 = "Vanilla Player Vehicle",
 	GUI_TBL_VAL_STATUS_2 = "Custom Player Vehicle",
 	GUI_TBL_VAL_CCAMID_TIP = "\u{f1980} Camera Access Map| |Distance Level:|Database Access Path:",
-	GUI_TBL_VAL_PSET_TIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of \u{f010b} or \u{f07ac}, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} (e.g. \"%s\")\n\u{f0b3b}\u{f07ac} (e.g. \"%s\")\n\u{f0b3c}Prefix of \u{f010b} (e.g. \"%s\")\n\u{f0b3d}Prefix of \u{f07ac} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Explorer to delete presets, if necessary.",
+	GUI_TBL_VAL_PSET_TIP1 = "When saving, the name \"%s\" is used. The new name must exactly match the value of \u{f010b} or \u{f07ac}, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} (e.g. \"%s\")\n\u{f0b3b}\u{f07ac} (e.g. \"%s\")\n\u{f0b3c}Prefix of \u{f010b} (e.g. \"%s\")\n\u{f0b3d}Prefix of \u{f07ac} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Explorer to delete presets, if necessary.",
+	GUI_TBL_VAL_PSET_TIP2 = "When saving, the name \"%s\" is used. The new name must exactly match the value of \u{f010b}, or at least be its prefix.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} (e.g. \"%s\")\n\u{f0b3b}Prefix of \u{f010b} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Explorer to delete presets, if necessary.",
 	GUI_TBL_VAL_ANG_TIP = "\u{f10f3} Angles (°)| |Default:|%d|Min:|%d|Max:|%d|In Use:|%d",
 	GUI_TBL_VAL_DIST_TIP = "\u{f054e} Distance| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Closer|Increase:|Farther",
 	GUI_TBL_VAL_X_TIP = "\u{f0d4c} X-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Left|Increase:|Right",
@@ -85,7 +86,7 @@ return {
 
 	--LOG: ℹ️ Info
 	LOG_CAM_OSET_DONE = "Camera offset '%s' is ready.",
-	LOG_CAM_PSET = "Camera preset: '%s'.",
+	LOG_CAM_PSET = "Camera preset: '%s' found.",
 	LOG_EVNT_MNT = "Event 'VehicleComponent:OnMountingEvent' triggered.",
 	LOG_EVNT_UMNT = "Event 'VehicleComponent:OnUnmountingEvent' triggered.",
 	LOG_EVNT_UMNT_FAIL = "Event 'VehicleComponent:OnUnmountingEvent' triggered without any valid reason.",
@@ -146,5 +147,11 @@ return {
 	LOG_PSETS_DIR_MISS = "No directory under '%s'.",
 	LOG_VEH_NAME_MISS = "Vehicle name not found.",
 	LOG_VEH_REC_ID_MISS = "Vehicle record ID is missing.",
-	LOG_VEH_REC_NAME_MISS = "Vehicle record name is missing."
+	LOG_VEH_REC_NAME_MISS = "Vehicle record name is missing.",
+
+	--THROW: 🆘 Errors
+	THROW_CACHE_ID = "Cache ID is missing.",
+	THROW_SQL_DELETE = "Invalid arguments in SQLite delete.",
+	THROW_SQL_INIT = "nvalid arguments in SQLite init.",
+	THROW_SQL_UPSERT = "nvalid arguments in SQLite upserts."
 }

@@ -1,1 +1,1 @@
-return{ID="v_standard25_mahir_supron_CameraPreset",Close={a=nil,x=nil,y=-0.05,z=nil,d=-0.2},Medium={a=nil,x=nil,y=-0.05,z=nil,d=0.9},Far={a=nil,x=nil,y=-0.05,z=nil,d=4.3},IsVanilla=true}
+return{ID="v_standard25_mahir_supron_CameraPreset",Close={y=-0.05,d=-0.2},Medium={y=-0.05,d=0.9},Far={y=-0.05,d=4.3},IsVanilla=true}

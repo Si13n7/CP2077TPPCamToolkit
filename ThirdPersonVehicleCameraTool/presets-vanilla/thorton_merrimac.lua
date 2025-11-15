@@ -1,1 +1,1 @@
-return{ID="4w_Thorton_Colby_Pickup",Close={a=nil,x=nil,y=0.16,z=nil,d=0.1},Medium={a=nil,x=nil,y=0.16,z=nil,d=1.8},Far={a=nil,x=nil,y=0.16,z=nil,d=4.6},IsVanilla=true}
+return{ID="4w_Thorton_Colby_Pickup",Close={y=0.16,d=0.1},Medium={y=0.16,d=1.8},Far={y=0.16,d=4.6},IsVanilla=true}

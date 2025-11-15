@@ -1,1 +1,1 @@
-return{ID="4w_Quadra66_Nomad",Close={a=nil,x=nil,y=0.05,z=nil,d=-0.1},Medium={a=nil,x=nil,y=0.05,z=nil,d=0.9},Far={a=nil,x=nil,y=0.05,z=nil,d=nil},IsVanilla=true}
+return{ID="4w_Quadra66_Nomad",Close={y=0.05,d=-0.1},Medium={y=0.05,d=0.9},Far={y=0.05},IsVanilla=true}
