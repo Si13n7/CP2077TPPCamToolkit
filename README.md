@@ -95,7 +95,7 @@ The mod uses the following structure:
 - [Cyber Engine Tweaks](https://github.com/maximegmd/CyberEngineTweaks) **1.35 or higher**
 - (Optional) [Native Settings UI](https://github.com/justarandomguyintheinternet/CP77_nativeSettings) for additional UI integration
 - (Optional) [Codeware](https://github.com/psiberx/cp2077-codeware) for extended functionality
-- (Optional) [FovControl](https://github.com/Si13n7/CP2077FovControl) for extended functionality
+- (Optional) [FovControl](https://github.com/Si13n7/CP2077-FovControl) for extended functionality
 
 ---
 
