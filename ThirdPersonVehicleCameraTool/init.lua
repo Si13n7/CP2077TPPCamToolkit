@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-10-25, 13:35 UTC+01:00 (MEZ)
+Version: 2025-11-02, 16:19 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -871,7 +871,10 @@ local gui = {
 
 	---Maps `ImGui.ToastType` to their combined message strings.
 	---@type table<ImGui.ToastType, string>
-	toasterBumps = {}
+	toasterBumps = {},
+
+	---Horizontal offset for the on-screen ruler position.
+	rulerOffset = 0
 }
 
 ---Stores per-vehicle editor state and recently used bundles.
@@ -4672,7 +4675,7 @@ local function drawRuler(scale, maxWidth, maxHeight)
 	end
 
 	local width, height = ImGui.GetWindowSize()
-	local x, y = (maxWidth - width) * 0.5, ((maxHeight - height) + (9 * scale))
+	local x, y = (maxWidth - width) * 0.5 + gui.rulerOffset * scale, (maxHeight - height) + 9 * scale
 	ImGui.SetWindowPos(x, y)
 
 	ImGui.PopStyleColor()
@@ -5877,6 +5880,9 @@ registerForEvent("onDraw", function()
 		ImGui.SameLine()
 		ImGui.SetNextItemWidth(sliderWidth)
 		local devMode = ImGui.SliderInt(Text.GUI_CREAT_MODE, state.devMode, DevLevels.DISABLED, DevLevels.FULL)
+		if ImGui.IsItemHovered() and ImGui.IsMouseClicked(1) then
+			devMode = DevLevels.DISABLED
+		end
 		if devMode ~= state.devMode then
 			state.devMode = clamp(devMode, DevLevels.DISABLED, DevLevels.FULL)
 			if state.devMode == DevLevels.DISABLED then
@@ -5886,6 +5892,21 @@ registerForEvent("onDraw", function()
 		end
 		gui.isPaddingLocked = ImGui.IsItemActive()
 		addTooltip(scale, Text.GUI_CREAT_MODE_TIP)
+
+		if state.devMode >= DevLevels.RULER then
+			ImGui.Dummy(0, halfHeightPadding)
+			ImGui.Dummy(controlPadding, 0)
+			ImGui.SameLine()
+			ImGui.SetNextItemWidth(sliderWidth)
+			local rulerOffset = ImGui.SliderInt(Text.GUI_RULER_OFFSET, gui.rulerOffset, -500, 500)
+			if ImGui.IsItemHovered() and ImGui.IsMouseClicked(1) then
+				rulerOffset = 0
+			end
+			if not equals(rulerOffset, gui.rulerOffset) then
+				gui.rulerOffset = clamp(rulerOffset, -500, 500)
+			end
+			addTooltip(scale, Text.GUI_RULER_OFFSET_TIP)
+		end
 
 		--The button that reloads all presets.
 		if state.devMode > DevLevels.DISABLED then
@@ -5903,11 +5924,11 @@ registerForEvent("onDraw", function()
 		end
 
 		ImGui.Dummy(0, doubleHeightPadding)
-	else
-		--Draw ruler only if CET isn't open.
-		if state.devMode >= DevLevels.RULER then
-			drawRuler(scale, maxWidth, maxHeight)
-		end
+	end
+
+	--Draw ruler if enabled.
+	if state.devMode >= DevLevels.RULER then
+		drawRuler(scale, maxWidth, maxHeight)
 	end
 
 	--Table showing vehicle name, camera ID and more — if certain conditions are met.
@@ -6210,6 +6231,10 @@ registerForEvent("onDraw", function()
 
 				ImGui.SetNextItemWidth(width)
 				local recent, changed = ImGui.InputText("##FileName", row.value, maxLen)
+				if ImGui.IsItemHovered() and ImGui.IsMouseClicked(1) then
+					recent = finale.Name
+					changed = true
+				end
 				if changed and recent then
 					local trimVal = trimLuaExt(recent)
 					if trimVal == id then
@@ -6357,6 +6382,7 @@ registerForEvent("onDraw", function()
 				local minVal = pick(j, -45, -5, -10, 0, -3.8)
 				local maxVal = pick(j, 90, 5, 10, 32, 24)
 				local precision = pick(j, "%.0f", "%.2f")
+				local origVal
 				color = nil
 
 				ImGui.TableNextColumn()
@@ -6374,6 +6400,10 @@ registerForEvent("onDraw", function()
 
 				ImGui.SetNextItemWidth(-1)
 				local recent = ImGui.DragFloat(format("##%s_%s", level, field), curVal, speed, minVal, maxVal, precision)
+				if ImGui.IsItemHovered() and ImGui.IsMouseClicked(1) then
+					origVal = get(pivot.Preset, defVal, level, field)
+					recent = origVal
+				end
 				if not equals(recent, curVal) then
 					recent = clamp(recent, minVal, maxVal)
 					deep(flux.Preset, level)[field] = recent
@@ -6384,7 +6414,7 @@ registerForEvent("onDraw", function()
 
 				local tip = tips[j]
 				if tip then
-					local origVal = get(pivot.Preset, defVal, level, field)
+					origVal = origVal or get(pivot.Preset, defVal, level, field)
 					addTooltip(nil, split(format(tip, defVal, minVal, maxVal, origVal), "|"))
 				end
 			end

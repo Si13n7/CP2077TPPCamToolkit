@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-10-25, 13:35 UTC+01:00 (MEZ)
+Version: 2025-11-02, 16:11 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -38,6 +38,8 @@ return {
 	GUI_SETTINGS_TIP = "Applies settings that affect all vehicles.\n\nDue to a game limitation affecting third-person behavior, some changes made while seated in a vehicle only take effect after exiting and re-entering.",
 	GUI_CREAT_MODE = " Creator Mode",
 	GUI_CREAT_MODE_TIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso controls debug output and overlay visibility:\n\u{f0b39}\u{f00a0} Disabled - runs in performance mode\n\u{f0b3a}\u{f018d} Logs basic info to the CET console\n\u{f0b3b}\u{f05b2} Keeps the overlay always visible\n\u{f0b3c}\u{f046d} Adds a ruler at the bottom of the screen\n\u{f0b3d}\u{f0369} Adds in-game pop-up notifications\n\u{f0b3e}\u{f1272} Adds extended debug info and log file output",
+	GUI_RULER_OFFSET = " Ruler X-Offset",
+	GUI_RULER_OFFSET_TIP = " Adjusts the horizontal position of the on-screen ruler.",
 	GUI_STATE_NO_VEH = "\u{f02fd} Please enter a vehicle first",
 	GUI_STATE_PSET_ON = "\u{f1668} Preset loaded and active",
 	GUI_STATE_PSET_OFF = "\u{f11be} No preset available",

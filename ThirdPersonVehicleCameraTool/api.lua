@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-10-25, 13:35 UTC+01:00 (MEZ)
+Version: 2025-11-02, 16:11 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -47,6 +47,7 @@ ______________________________________________
 ---@field EndCombo fun() # Ends the current combo box started with `ImGui.BeginCombo()`.
 ---@field IsItemHovered fun(): boolean # Returns true if the last item is hovered by the mouse cursor.
 ---@field IsItemActive fun(): boolean # Returns true while the last item is being actively used (e.g., held with mouse or keyboard input).
+---@field IsMouseClicked fun(button: integer): boolean # Returns true on the frame when the specified mouse button is pressed. Button indices: 0 = left, 1 = right, 2 = middle.
 ---@field SetKeyboardFocusHere fun(offset?: integer) # Sets the keyboard focus to the next widget (or `offset` widgets ahead) in the window. Useful to programmatically focus text inputs or other interactive items.
 ---@field SetNextItemWidth fun(width: number) # Sets a fixed width for the next item (e.g., combo box, slider, or text input). Affects layout and alignment.
 ---@field BeginTooltip fun() # Begins creating a tooltip. Must be paired with `ImGui.EndTooltip()`.
