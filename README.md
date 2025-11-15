@@ -1,22 +1,21 @@
 # Third-Person Vehicle Camera Tool
 
-A Cyber Engine Tweaks mod for **Cyberpunk 2077** that provides complete control over all third-person vehicle camera offsets.
+A Cyber Engine Tweaks mod for **Cyberpunk 2077** that provides complete control over the third-person vehicle camera.
 It allows you to view, edit, generate, test, and save camera presets for **every vehicle** in the game — vanilla or modded.
 
-This tool is designed for users who want consistent camera behavior, accurate positioning and full customization, without relying on built-in game defaults.
+This tool is for players who want consistent, accurate, fully customizable camera behavior, and it also fixes mismatched or broken camera settings that hurt immersion. The result: identical, reliable behavior across every vehicle.
 
 ---
 
 ## ✨ Features
 
-- Full TPP camera offset editing (Close / Medium / Far views)
-- Support for all vanilla and custom vehicles
-- Automatic preset generation for vehicles without presets
+- Full TPP camera offset editing
+- Hundreds of third-person camera settings
+- 300+ pre-made presets covering thousands of vehicle variants
 - Creator Mode with extensive debug levels
+- On-screen ruler and adjustable UI options
 - Preset Explorer with search filters
 - Usage statistics for each preset
-- Global and advanced camera settings
-- On-screen ruler and adjustable UI options
 - Toast notifications and detailed logging
 - Compatible with game version **2.21+** and CET **1.35+**
 
@@ -25,7 +24,7 @@ This tool is designed for users who want consistent camera behavior, accurate po
 ## 📦 Installation
 
 1. Install **Cyber Engine Tweaks** (CET)
-2. Extract the mod folder into:
+2. Extract the `ThirdPersonVehicleCameraTool` folder into:
    ```
    Cyberpunk 2077/bin/x64/plugins/cyber_engine_tweaks/mods/
    ```
@@ -50,27 +49,27 @@ Debug levels range from:
 
 ### Preset Editor
 - Edit camera angles, offsets, distances
-- Apply changes
+- Apply changes live (no save) for quick testing
 - Save persistent presets
 - Rename presets for cross-vehicle use
-- Restore default presets
+- Restore default presets easily
 - View live token hashes for change detection
 
 ### Preset Explorer
 - Browse all preset files
 - Filter installed, modded, unused, active, vanilla
-- View usage history
-- Delete obsolete presets
+- View usage history to quickly identify unnecessary mods
+- Delete obsolete presets or mods
 
 ### Global Settings
 Affects all vehicles:
-- Adjust FOV
+- Adjust field of view
 - Disable auto-centering
 - Zoom
 - Override default camera behavior
 - Fine-tune advanced raw parameters
 
-Requires exiting and re-entering the vehicle for some values.
+Some settings require you to exit and re-enter the vehicle (third-person game limitation).
 
 ---
 
@@ -79,7 +78,7 @@ Requires exiting and re-entering the vehicle for some values.
 The mod uses the following structure:
 
 ```
-/mods/TPPVCamTool/
+/mods/ThirdPersonVehicleCameraTool/
     init.lua         → main logic, editor, presets, UI
     text.lua         → all UI/tooltip/label strings
     api.lua          → IntelliSense definitions (no runtime code)
@@ -93,10 +92,10 @@ The mod uses the following structure:
 ## ✔ Requirements
 
 - Cyberpunk 2077 **2.21 or higher**
-- Cyber Engine Tweaks **1.35 or higher**
-- (Optional) Native Settings UI for additional UI integration
-- (Optional) Codeware for extended functionality
-- (Optional) FovControl for extended functionality
+- [Cyber Engine Tweaks](https://github.com/maximegmd/CyberEngineTweaks) **1.35 or higher**
+- (Optional) [Native Settings UI](https://github.com/justarandomguyintheinternet/CP77_nativeSettings) for additional UI integration
+- (Optional) [Codeware](https://github.com/psiberx/cp2077-codeware) for extended functionality
+- (Optional) [FovControl](https://github.com/Si13n7/CP2077FovControl) for extended functionality
 
 ---
 
