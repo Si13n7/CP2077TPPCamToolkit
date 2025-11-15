@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-19, 19:14 UTC+01:00 (MEZ)
+Version: 2025-04-23, 00:00 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -132,6 +132,12 @@ local used_presets = {}
 ---@field y number # The offset on the Y-axis.
 ---@field z number # The offset on the Z-axis.
 
+---Represents optional overrides for how camera presets are accessed in TweakDB.
+---@class ICameraAccessOverrides
+---@field Key string[]? # Optional format string to override the TweakDB record key (replacing "Camera.VehicleTPP").
+---@field Levels string[]? # Optional list of level identifiers to use instead of the default `CameraLevels` array.
+---@field Due boolean? # If true, indicates that these overrides are pending and should be applied on the next preset update action.
+
 ---Represents a vehicle camera preset or links to another one.
 ---@class ICameraPreset
 ---@field ID string? # The camera ID used for the vehicle.
@@ -139,7 +145,8 @@ local used_presets = {}
 ---@field Medium IOffsetData? # The offset data for medium camera view.
 ---@field Far IOffsetData? # The offset data for far camera view.
 ---@field Link string? # The name of another vehicle appearance to link to (if applicable).
----@field IsDefault boolean? # Whether to reset to default camera offsets.
+---@field Overrides ICameraAccessOverrides? # Optional overrides for TweakDB access, used when a custom record key is specified.
+---@field IsDefault boolean? # Determines whether this camera preset is a vanilla one.
 
 ---Contains all camera presets and linked vehicles.
 ---@type table<string, ICameraPreset>
@@ -287,6 +294,24 @@ local function isTable(...)
 	return isType("table", ...)
 end
 
+---Determines whether a table is a pure sequence (array) with contiguous integer keys 1..#t.
+---Returns false if any key is non‑numeric or if there are gaps in the numeric index.
+---@param t table? # The table to test (nil or non‑table will be treated as not an array).
+---@return boolean # True if `t` is an array of length `#t` with no non‑numeric keys.
+local function isArray(t)
+	if not isTable(t) then return false end
+	---@cast t table
+	local n = #t
+	local c = 0
+	for k in pairs(t) do
+		if type(k) ~= "number" then
+			return false
+		end
+		c = c + 1
+	end
+	return c == n
+end
+
 ---Checks whether a given string represents a valid number (integer or float).
 ---@param s string # The input string to check.
 ---@return boolean # True if the string is a valid number, false otherwise.
@@ -348,10 +373,15 @@ end
 ---Checks if a string starts with a given prefix.
 ---@param s string # The string to check.
 ---@param v string # The prefix to match.
+---@param caseInsensitive boolean? # True if string comparisons ignore letter case.
 ---@return boolean # True if `s` starts with `v`, false otherwise.
-local function startsWith(s, v)
+local function startsWith(s, v, caseInsensitive)
 	if not s or not v then return false end
 	s, v = tostring(s), tostring(v)
+	if caseInsensitive then
+		s = s:lower()
+		v = v:lower()
+	end
 	if #s == #v then return s == v end
 	return #s > #v and s:sub(1, #v) == v
 end
@@ -359,10 +389,15 @@ end
 ---Checks if a string ends with a specified suffix.
 ---@param s string # The string to check.
 ---@param v string # The suffix to look for.
+---@param caseInsensitive boolean? # True if string comparisons ignore letter case.
 ---@return boolean Returns # True if the `s` ends with the specified `v`, otherwise false.
-local function endsWith(s, v)
+local function endsWith(s, v, caseInsensitive)
 	if not s or not v then return false end
 	s, v = tostring(s), tostring(v)
+	if caseInsensitive then
+		s = s:lower()
+		v = v:lower()
+	end
 	if #s == #v then return s == v end
 	return #s > #v and s:sub(- #v) == v
 end
@@ -459,7 +494,7 @@ end
 ---Ensures a nested table path exists and returns the deepest subtable.
 ---@param t table # The table to access.
 ---@param ... any # Keys leading to the nested table
----@return table? # The final nested subtable if `t` is a table; otherwise `nil`.
+---@return any # The final nested subtable if `t` is a table; otherwise `nil`.
 local function deep(t, ...)
 	if not isTable(t) then return nil end
 	for i = 1, select("#", ...) do
@@ -524,29 +559,50 @@ end
 ---@return string # A string representation of the value.
 local function serialize(x)
 	if not isTable(x) then
-		if hasNumber(x) then
+		if isString(x) then
+			return format("%q", x)
+		elseif isNumber(x) then
 			local str = format("%.3f", x):gsub("0+$", ""):gsub("%.$", "")
 			return str
+		else
+			return tostring(x)
 		end
-		return tostring(x)
 	end
-	local s = "{"
+
+	if isArray(x) then
+		local parts = {}
+		for i = 1, #x do
+			parts[i] = serialize(x[i])
+		end
+		return "{" .. concat(parts, ",") .. "}"
+	end
+
+	local parts = {}
 	for k, v in kpairs(x) do
-		s = s .. "[" .. serialize(k) .. "]=" .. serialize(v) .. ","
+		local key
+		if isString(k) and k:match("^[%a_][%w_]*$") ~= nil then
+			key = k
+		else
+			key = "[" .. serialize(k) .. "]"
+		end
+		parts[#parts + 1] = key .. "=" .. serialize(v)
 	end
-	return s:sub(1, -2) .. "}"
+	return "{" .. concat(parts, ",") .. "}"
 end
 
----Calculates a non-cryptographic checksum of any value using Adler-32.
----Used to detect changes in structured data like tables.
----@param x any # The value to calculate the checksum for.
----@return integer # A 32-bit checksum value.
-local function checksum(x)
-	local s = serialize(x)
+---Computes an Adler‑32 checksum over one or more values without allocating a new table.
+---@param ... any # One or more values to include in the checksum calculation.
+---@return integer # 32‑bit checksum combining all arguments.
+local function checksum(...)
 	local a, b = 1, 0
-	for i = 1, #s do
-		a = (a + s:byte(i)) % 65521
-		b = (b + a) % 65521
+	local n = select('#', ...)
+	for i = 1, n do
+		local v = select(i, ...)
+		local s = serialize(v)
+		for j = 1, #s do
+			a = (a + s:byte(j)) % 65521
+			b = (b + a) % 65521
+		end
 	end
 	return bor(lshift(b, 16), a)
 end
@@ -565,74 +621,103 @@ local function fileExists(path)
 end
 
 ---Returns a formatted TweakDB record key for accessing vehicle camera data.
----@param id string # The vehicle camera preset ID.
+---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera level path (e.g. "High_Close").
 ---@return string? # The formatted TweakDB record key.
-local function getCameraTweakKey(id, path, var)
+local function getCameraTweakKey(preset, path, var)
+	if not isTable(preset) then return nil end
+
+	local id = preset.ID
 	if not isString(id, path, var) then return nil end
 
-	local isVehicle = id == "v_militech_basilisk_CameraPreset"
-	if isVehicle and (startsWith(path, "Low") or contains(path, "DriverCombat")) then
+	local overrides = preset.Overrides ---@cast overrides ICameraAccessOverrides
+	if isTable(overrides) and overrides.Due then
+		if not isString(overrides.Key) then
+			return nil
+		end
+		local key = format("%s_%s.%s", overrides.Key, path, var)
+		return key
+	end
+
+	local isBasilisk = preset.ID == "v_militech_basilisk_CameraPreset"
+	if isBasilisk and (startsWith(path, "Low") or contains(path, "DriverCombat")) then
 		return nil
 	end
 
-	local section = isVehicle and "Vehicle" or "Camera"
-	return format("%s.VehicleTPP_%s_%s.%s", section, id, path, var)
+	local section = isBasilisk and "Vehicle" or "Camera"
+	local key = format("%s.VehicleTPP_%s_%s.%s", section, preset.ID, path, var)
+	return key
 end
 
 ---Fetches the default rotation pitch value for a vehicle camera.
----@param id string # The preset ID of the vehicle.
+---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera path for the vehicle.
 ---@return number # The default rotation pitch for the given camera path.
-local function getCameraDefaultRotationPitch(id, path)
-	local key = getCameraTweakKey(id, path, "defaultRotationPitch")
+local function getCameraDefaultRotationPitch(preset, path)
+	local key = getCameraTweakKey(preset, path, "defaultRotationPitch")
 
+	local isLow = startsWith(path, "Low", true)
 	local defaults = {
-		v_militech_basilisk_CameraPreset = 5,
-		v_utility4_militech_behemoth_Preset = 12
+		v_militech_basilisk_CameraPreset    = { low = 5, high = 5 },
+		v_utility4_militech_behemoth_Preset = { low = 5, high = 12 },
+		default                             = { low = 4, high = 11 },
 	}
-	local defVal = defaults[id] or 11
+
+	local def = defaults[preset.ID] or defaults.default
+	local defVal = isLow and def.low or def.high
+
 	if not key then return defVal end
 
-	return tonumber(TweakDB:GetFlat(key)) or defVal
+	local value = tonumber(TweakDB:GetFlat(key))
+	if isLow and value and (value == 11 or value == 12) then
+		value = value - 7
+	end
+
+	return value or defVal
 end
 
 ---Sets the default rotation pitch value for a vehicle camera.
----@param id string # The preset ID of the vehicle.
+---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera path for the vehicle.
 ---@param value number # The value to set for the default rotation pitch.
-local function setCameraDefaultRotationPitch(id, path, value)
-	local key = getCameraTweakKey(id, path, "defaultRotationPitch")
+local function setCameraDefaultRotationPitch(preset, path, value)
+	local key = getCameraTweakKey(preset, path, "defaultRotationPitch")
 	if not key then return end
 
-	local fallback = getCameraDefaultRotationPitch(id, path)
-	if not isNumber(value) or equals(value, fallback) then return end
+	local fallback = getCameraDefaultRotationPitch(preset, path)
+
+	if startsWith(path, "Low", true) then
+		value = value - 7
+	end
+
+	local overrideDue = preset.Overrides and preset.Overrides.Due
+	if not isNumber(value) or (not overrideDue and equals(value, fallback)) then return end
 
 	TweakDB:SetFlat(key, value or fallback)
 end
 
 ---Fetches the current camera offset from TweakDB based on the specified ID and path.
----@param id string # The camera ID.
+---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera path to retrieve the offset for.
 ---@return Vector3? # The camera offset as a Vector3.
-local function getCameraLookAtOffset(id, path)
-	local key = getCameraTweakKey(id, path, "lookAtOffset")
+local function getCameraLookAtOffset(preset, path)
+	local key = getCameraTweakKey(preset, path, "lookAtOffset")
 	if not key then return nil end
 
 	return TweakDB:GetFlat(key)
 end
 
 ---Sets a camera offset in TweakDB to the specified position values.
----@param id string # The camera ID.
+---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera path to set the offset for.
 ---@param x number # The X-coordinate of the camera position.
 ---@param y number # The Y-coordinate of the camera position.
 ---@param z number # The Z-coordinate of the camera position.
-local function setCameraLookAtOffset(id, path, x, y, z)
-	local key = getCameraTweakKey(id, path, "lookAtOffset")
+local function setCameraLookAtOffset(preset, path, x, y, z)
+	local key = getCameraTweakKey(preset, path, "lookAtOffset")
 	if not key then return end
 
-	local fallback = getCameraLookAtOffset(id, path)
+	local fallback = getCameraLookAtOffset(preset, path)
 	if not fallback or (equals(x, fallback.x) and equals(y, fallback.y) and equals(z, fallback.z)) then return end
 
 	local value = Vector3.new(x or fallback.x, y or fallback.y, z or fallback.z)
@@ -779,11 +864,11 @@ local function getPreset(id)
 
 	local preset = { ID = id } ---@cast preset ICameraPreset
 	for i, path in ipairs(CameraLevels) do
-		local vec3 = getCameraLookAtOffset(id, path)
+		local vec3 = getCameraLookAtOffset(preset, path)
 		if not vec3 or (not vec3.x and not vec3.y and not vec3.z) then goto continue end
 
 		local level = PresetLevels[(i - 1) % 3 + 1]
-		local angle = getCameraDefaultRotationPitch(id, path)
+		local angle = getCameraDefaultRotationPitch(preset, path)
 
 		preset[level] = {
 			a = tonumber(angle),
@@ -907,13 +992,34 @@ local function applyPreset(preset, count)
 		return
 	end
 
-	local fallback = getDefaultPreset(preset) or {}
-	for i, path in ipairs(CameraLevels) do
-		local level = PresetLevels[(i - 1) % 3 + 1]
-		local a, x, y, z = getOffsetData(preset, fallback, level)
+	local levelMap = { CameraLevels }
+	local overrides = preset.Overrides ---@cast overrides ICameraAccessOverrides
+	local hasOverrides = isTable(overrides)
+	if hasOverrides and overrides.Levels then
+		insert(levelMap, overrides.Levels)
+	end
 
-		setCameraLookAtOffset(preset.ID, path, x, y, z)
-		setCameraDefaultRotationPitch(preset.ID, path, a)
+	local fallback = getDefaultPreset(preset) or {}
+	for _, levels in ipairs(levelMap) do
+		if not isTable(levels) then goto continue end
+
+		for i, path in ipairs(levels) do
+			local level = PresetLevels[(i - 1) % 3 + 1]
+			local a, x, y, z = getOffsetData(preset, fallback, level)
+
+			setCameraLookAtOffset(preset, path, x, y, z)
+			setCameraDefaultRotationPitch(preset, path, a)
+		end
+
+		::continue::
+
+		if hasOverrides then
+			overrides.Due = true
+		end
+	end
+
+	if hasOverrides then
+		overrides.Due = nil
 	end
 
 	insert(used_presets, preset.ID)
@@ -1156,6 +1262,12 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 		return false
 	end
 
+	local overrides = get(camera_presets, nil, name, "Overrides")
+	if isTable(overrides) then
+		local serialized = serialize(overrides)
+		insert(parts, format("Overrides=%s", serialized))
+	end
+
 	if saveAsDefault then
 		insert(parts, "IsDefault=true")
 	end
@@ -1296,8 +1408,8 @@ local function addTooltip(...)
 		ImGui.BeginTooltip()
 		if not ImGui.BeginTable("TooltipTable", 2) then return end
 		for i = 1, count, 2 do
-			local key = tostring(select(i, ...) or " ")
-			local val = tostring(select(i + 1, ...) or " ")
+			local key = tostring(select(i, ...))
+			local val = tostring(select(i + 1, ...) or "")
 			ImGui.TableNextRow()
 			ImGui.TableSetColumnIndex(0)
 			ImGui.Text(key)
@@ -1310,6 +1422,7 @@ local function addTooltip(...)
 	end
 
 	local item = select(1, ...)
+	if item == nil then return end
 	if isString(item) then
 		ImGui.BeginTooltip()
 		ImGui.PushTextWrapPos(420)
@@ -1363,6 +1476,15 @@ local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	return result
 end
 
+---Generates a checksum token for a camera preset by combining its ID and offset tables.
+---@param preset ICameraPreset? # The camera preset containing fields `ID`, `Close`, `Medium`, and `Far`.
+---@return integer # Adler‑32 checksum of `preset.ID`, `preset.Close`, `preset.Medium`, `preset.Far`, or -1 if invalid.
+local function getEditorPresetToken(preset)
+	if not isTable(preset) then return -1 end ---@cast preset ICameraPreset
+	local token = checksum(preset.ID, preset.Close, preset.Medium, preset.Far)
+	return token
+end
+
 ---Creates a new editor preset entry from a camera preset.
 ---@param preset ICameraPreset # The source camera preset.
 ---@param key string # Identifier/name for this preset entry.
@@ -1371,17 +1493,15 @@ end
 ---@return IEditorPreset # A table with fields: Preset, Key, Name, Token, IsPresent.
 local function getEditorPreset(preset, key, snapshot, verify)
 	local object = preset
-	local isdef = object.IsDefault
 	if snapshot then
 		object = clone(object)
-		object.IsDefault = nil --Would break comparison logic
 	end
 	return {
 		Preset = object,
 		Key = key,
 		Name = key,
-		Token = checksum(object),
-		IsPresent = verify and presetFileExists(key, isdef) or false
+		Token = getEditorPresetToken(object),
+		IsPresent = verify and presetFileExists(key) or false
 	}
 end
 
@@ -1428,12 +1548,13 @@ end
 ---@param dest IEditorPreset # The preset entry to overwrite (modified in place).
 ---@param verify boolean? # If true, recomputes `IsPresent` by checking the file system for `src.Key`.
 local function replaceEditorPreset(src, dest, verify)
-	if not isTable(dest) or not isTable(src) then return end
-	dest.Preset = clone(src.Preset)
-	dest.Preset.IsDefault = nil --Would mess with comparison logic.
+	if not isTable(src, dest) then return end
+
+	local preset = clone(src.Preset)
+	dest.Preset = preset
 	dest.Key = src.Key
 	dest.Name = src.Name
-	dest.Token = checksum(dest.Preset)
+	dest.Token = getEditorPresetToken(preset)
 	dest.IsPresent = verify and presetFileExists(src.Key) or false
 end
 
@@ -1612,10 +1733,12 @@ registerForEvent("onDraw", function()
 		ImGui.TableSetupColumn("\u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
+		local overrides = get(camera_presets, {}, key, "Overrides")
 		local rows = {
 			{ label = "\u{f010b}", tip = Text.GUI_TBL_LABL_VEH_TIP,   value = name },
 			{ label = "\u{f07ac}", tip = Text.GUI_TBL_LABL_APP_TIP,   value = appName },
 			{ label = "\u{f0567}", tip = Text.GUI_TBL_LABL_CAMID_TIP, value = id },
+			{ label = "\u{f0569}", tip = Text.GUI_TBL_LABL_OKEY_TIP,  value = overrides.Key },
 			{
 				label    = "\u{f1952}",
 				tip      = Text.GUI_TBL_LABL_PSET_TIP,
@@ -1626,6 +1749,8 @@ registerForEvent("onDraw", function()
 		}
 
 		for _, row in ipairs(rows) do
+			if row.value == nil then goto continue end
+
 			ImGui.TableNextRow(0, rowHeight)
 			ImGui.TableSetColumnIndex(0)
 
@@ -1678,6 +1803,8 @@ registerForEvent("onDraw", function()
 				alignVertNext(rowHeight)
 				ImGui.Text(tostring(row.value or Text.GUI_NONE))
 			end
+
+			::continue::
 		end
 
 		ImGui.EndTable()
@@ -1771,7 +1898,7 @@ registerForEvent("onDraw", function()
 
 	if tasks.Validate then
 		tasks.Validate = false
-		flux.Token = checksum(flux.Preset)
+		flux.Token = getEditorPresetToken(flux.Preset)
 		tasks.Apply = flux.Token ~= pivot.Token
 		tasks.Save = flux.Token ~= finale.Token
 		tasks.Restore = tasks.Save and flux.Token == nexus.Token
@@ -1789,9 +1916,16 @@ registerForEvent("onDraw", function()
 	if ImGui.Button(Text.GUI_APPLY, halfContentWidth, buttonHeight) then
 		--Always applies on user action — even if unnecessary.
 		tasks.Apply = false
+
+		local overrides = get(camera_presets, nil, pivot.Key, "Overrides")
 		camera_presets[pivot.Key] = nil
-		camera_presets[key] = flux.Preset
+		if not tasks.Restore then
+			camera_presets[key] = flux.Preset
+			camera_presets[key].Overrides = overrides
+		end
+
 		replaceEditorPreset(flux, pivot)
+
 		logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSET_UPD, key)
 	end
 	popColors(pushed)
@@ -1824,9 +1958,16 @@ registerForEvent("onDraw", function()
 
 		--Apply is always performed on user request, even if redundant.
 		tasks.Apply = false
+
+		local overrides = get(camera_presets, nil, pivot.Key, "Overrides")
 		camera_presets[pivot.Key] = nil
-		camera_presets[key] = flux.Preset
+		if not tasks.Restore then
+			camera_presets[key] = flux.Preset
+			camera_presets[key].Overrides = overrides
+		end
+
 		replaceEditorPreset(flux, pivot)
+
 		log(LogLevels.INFO, Text.LOG_PSET_UPD, key)
 
 		--Saving is always performed, even if no changes were made in the editor. The
@@ -1834,6 +1975,7 @@ registerForEvent("onDraw", function()
 		--the mod wouldn't detect that at runtime. It would be problematic if saving
 		--were blocked just because the mod assumes there are no changes.
 		if savePreset(key, flux.Preset, true) then
+			tasks.Restore = false
 			tasks.Save = false
 
 			if tasks.Rename then

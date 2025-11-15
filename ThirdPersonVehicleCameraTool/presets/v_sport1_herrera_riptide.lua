@@ -1,1 +1,0 @@
-return{ID="4w_herrera_riptide",Close={y=0.8},Medium={y=1.05}}

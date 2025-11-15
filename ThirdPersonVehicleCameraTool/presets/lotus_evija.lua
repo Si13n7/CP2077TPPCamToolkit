@@ -1,0 +1,1 @@
+return{ID="4w_caliburn",Close={y=-0.75},Medium={y=-0.8},Far={y=-1.5},Overrides={Key="evija_camera",Levels={"high_close","high_medium","high_far","low_close","low_medium","low_far"}}}
