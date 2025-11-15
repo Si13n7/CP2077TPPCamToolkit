@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-04-26, 21:34 UTC+01:00 (MEZ)
+Version: 2025-04-28, 00:00 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -25,6 +25,7 @@ return {
 
 	--GUI: 🚀 Main Controls and Tooltips
 	GUI_TITL = "Third-Person Vehicle Camera Tool",
+	GUI_OLD_CET = "\u{f0026} This mod requires CET version 1.35 or higher. You are using an outdated version (%s), which may cause issues. Any use is at your own risk. Please do not report any problems unless you meet the minimum requirements.",
 	GUI_TGL_MOD = "Toggle Mod Functionality",
 	GUI_TGL_MOD_TIP = "Enables or disables the mod functionality.",
 	GUI_RLD_ALL = "\u{f054d} Reload All Presets ",
@@ -91,7 +92,7 @@ return {
 	LOG_NAME_MISM = "The new preset name must be '%s' or a prefix of it; otherwise, it will not be applied and will be ignored.",
 	LOG_NAMES_MISM = "The new preset name must be '%s', '%s', or a prefix of one of them; otherwise, it will not be applied and will be ignored.",
 	LOG_NO_PLAYER = "No player detected.",
-	LOG_NO_PSET_FOUND = "No preset found for '%s",
+	LOG_NO_PSET_FOUND = "No preset found for '%s'.",
 	LOG_NO_VEH = "Player not inside any vehicle.",
 	LOG_PSET_NOT_CHANGED = "No changes were made to preset '%s' compared to the default preset '%s'.",
 	LOG_PSET_NOT_SAVED = "File 'presets/%s.lua' could not be saved.",
@@ -103,7 +104,7 @@ return {
 	LOG_DEL_FAILURE = "Failed to delete preset '%s'. %s",
 	LOG_DIR_NOT_EXIST = "You cannot delete the entire directory under '%s'.",
 	LOG_FAIL_APPLY = "Could not apply preset: incomplete parameters.",
-	LOG_FAIL_LOAD = "Failed to load preset '%s/%s': %s",
+	LOG_FAIL_LOAD = "Failed to load preset '%s/%s': '%s'.",
 	LOG_MISS_DEF = "Default preset '%s' could not be found.",
 	LOG_MOVE_FAILURE = "Failed to rename preset '%s' to '%s'. %s",
 	LOG_NO_APP = "The vehicle's appearance could not be found.",

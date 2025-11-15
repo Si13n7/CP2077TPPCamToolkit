@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-26, 21:44 UTC+01:00 (MEZ)
+Version: 2025-04-28, 00:00 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -84,6 +84,54 @@ local Colors = {
 	OLIVE = 0x8a297a68
 }
 
+---Determines whether the mod is enabled.
+---@type boolean
+local mod_enabled = true
+
+---Represents a parsed version number in structured format.
+---@class IVersion
+---@field Major number # Major version number (required).
+---@field Minor number # Minor version number (optional, defaults to 0 if missing).
+---@field Build number # Build number (optional, defaults to 0 if missing).
+---@field Revision number # Revision number (optional, defaults to 0 if missing).
+
+---Indicates whether the running CET version meets the minimum required version.
+---@type boolean
+local runtime_min = false
+
+---Indicates whether the running CET version supports all required features.
+---@type boolean
+local runtime_full = false
+
+---The current debug mode level controlling logging and alerts:
+---0 = Disabled
+---1 = Print
+---2 = Print + Alert
+---3 = Print + Alert + Log
+---@type DevLevelType
+local dev_mode = DevLevels.DISABLED
+
+---Indicates whether there are active toast notifications pending.
+---@type boolean
+local toaster_active = false
+
+---Maps `ImGui.ToastType` to their combined message strings.
+---@type table<ImGui.ToastType, string>
+local toaster_bumps = {}
+
+---Determines whether the CET overlay is open.
+---@type boolean
+local overlay_open
+
+---Current horizontal padding value used for centering UI elements.
+---Dynamically adjusted based on available window width.
+---@type number
+local padding_width
+
+---When set to true, disables dynamic window padding adjustments and uses the fixed `padding_width` value.
+---@type boolean
+local padding_locked
+
 ---Constant array of all camera levels.
 ---@type string[]
 local CameraLevels = {
@@ -108,18 +156,6 @@ local PresetLevels = { "Close", "Medium", "Far" }
 ---Constant array of `IOffsetData` keys.
 ---@type string[]
 local PresetOffsets = { "a", "x", "y", "z" }
-
----The current debug mode level controlling logging and alerts:
----0 = Disabled
----1 = Print
----2 = Print + Alert
----3 = Print + Alert + Log
----@type DevLevelType
-local dev_mode = DevLevels.DISABLED
-
----Determines whether the mod is enabled.
----@type boolean
-local mod_enabled = true
 
 ---Stores original custom parameter values before resetting them to global defaults.
 ---Keys are TweakDB paths (string), and values are the original values.
@@ -162,19 +198,6 @@ local used_presets = {}
 ---@type table<string, ICameraPreset>
 local camera_presets = {}
 
----Determines whether the CET overlay is open.
----@type boolean
-local overlay_open
-
----Current horizontal padding value used for centering UI elements.
----Dynamically adjusted based on available window width.
----@type number
-local padding_width
-
----When set to true, disables dynamic window padding adjustments and uses the fixed `padding_width` value.
----@type boolean
-local padding_locked
-
 ---A single camera preset entry in the editor, including its data and metadata.
 ---@class IEditorPreset
 ---@field Preset ICameraPreset # The actual preset data (angles and offsets).
@@ -205,10 +228,6 @@ local padding_locked
 ---@type table<string, IEditorBundle|nil>
 local editor_bundles = {}
 
----Counts user right-clicks to unlock a hidden feature in the editor once the value reaches 10.
----@type number
-local editor_secret = 0
-
 ---Determines whether overwriting the preset file is allowed.
 ---@type boolean
 local overwrite_confirm
@@ -220,6 +239,54 @@ local file_man_open = false
 --#endregion
 
 --#region 🔧 Utility Functions
+
+---Parses a version string or returns an existing IVersion table.
+---Accepts version formats like "[v]major[.minor[.build[.revision]]]" or numeric/string variants.
+---@param x table|string # A version input as a string, or IVersion table.
+---@return IVersion # A table with Major, Minor, Build, and Revision fields as numbers.
+local function getVersion(x)
+	if type(x) == "table" and type(x.Major) == "number" then return x end
+	if type(x) ~= "string" then x = tostring(x) end
+	local v1, v2, v3, v4 = x:match("^v?(%d+)%.?(%d*)%.?(%d*)%.?(%d*)$")
+	return {
+		Major = tonumber(v1) or 0,
+		Minor = tonumber(v2) or 0,
+		Build = tonumber(v3) or 0,
+		Revision = tonumber(v4) or 0
+	}
+end
+
+---Compares two version strings in "[v]major.minor[.build[.revision]]" format.
+---Returns 1 if a > b, -1 if a < b, or 0 if equal.
+---@param a IVersion|string # First version.
+---@param b IVersion|string # Second version.
+---@return integer # 1 if `a > b`, -1 if `a < b`, 0 if equal.
+local function compareVersion(a, b)
+	local v1 = getVersion(a)
+	local v2 = getVersion(b)
+	for _, k in ipairs({
+		"Major",
+		"Minor",
+		"Build",
+		"Revision"
+	}) do
+		local n1 = v1[k] or 0
+		local n2 = v2[k] or 0
+		if n1 > n2 then
+			return 1
+		elseif n1 < n2 then
+			return -1
+		end
+	end
+	return 0
+end
+
+---Checks if the runtime version is greater than or equal to a specified minimum version.
+---@param v string # Minimum required version in "[v]major[.minor[.build[.revision]]]" format.
+---@return boolean # `true` if the runtime version is >= the specified version, `false` otherwise.
+local function isRuntimeVersionAtLeast(v)
+	return compareVersion(GetVersion(), v) >= 0
+end
 
 ---Logs and displays messages based on the current `dev_mode` level.
 ---Messages can be written to the log file, printed to the console, or shown as in-game alerts.
@@ -252,9 +319,25 @@ local function log(lvl, id, fmt, ...)
 		end
 	end
 	if dev_mode >= DevLevels.ALERT then
-		local player = Game.GetPlayer()
-		if player then
-			player:SetWarningMessage(msg, 5)
+		if runtime_full then
+			local t
+			if lvl == LogLevels.ERROR then
+				t = ImGui.ToastType.Error
+			elseif lvl == LogLevels.WARN then
+				t = ImGui.ToastType.Warning
+			else
+				t = ImGui.ToastType.Info
+			end
+
+			local s = toaster_bumps[t]
+			toaster_bumps[t] = "\u{f035f} " .. (s and format("%s\n\n%s", msg, s) or msg)
+
+			toaster_active = true
+		else
+			local player = Game.GetPlayer()
+			if player then
+				player:SetWarningMessage(msg, 5)
+			end
 		end
 	end
 	if dev_mode >= DevLevels.BASIC then
@@ -478,23 +561,6 @@ local function endsWith(s, v, caseInsensitive)
 	return #s > #v and s:sub(- #v) == v
 end
 
----Returns a shortened version of the input string by removing a number of trailing underscore-separated parts.
----The number of parts removed depends on how many underscores are in the string.
----@param s string # The input string (e.g., "v_sport2_porsche_911turbo_player").
----@return string # The shortened string (e.g., "v_sport2_porsche").
-local function chopUnderscoreParts(s)
-	local t = {}
-	s = tostring(s or "")
-	for p in s:gmatch("[^_]+") do
-		insert(t, p)
-	end
-	local n = #t / 2
-	if n <= 1 then
-		n = n + 1
-	end
-	return concat(t, "_", 1, n)
-end
-
 ---Checks if a given filename string ends with `.lua`.
 ---@param s string # The value to check, typically a string representing a filename.
 ---@return boolean # Returns `true` if the filename ends with `.lua`, otherwise `false`.
@@ -535,6 +601,23 @@ local function split(s, sep, trim)
 		insert(t, trim and v:match("^%s*(.-)%s*$") or v)
 	end
 	return t
+end
+
+---Returns a shortened version of the input string by removing a number of trailing underscore-separated parts.
+---The number of parts removed depends on how many underscores are in the string.
+---@param s string # The input string (e.g., "v_sport2_porsche_911turbo_player").
+---@return string # The shortened string (e.g., "v_sport2_porsche").
+local function chopUnderscoreParts(s)
+	local t = {}
+	s = tostring(s or "")
+	for p in s:gmatch("[^_]+") do
+		insert(t, p)
+	end
+	local n = #t / 2
+	if n <= 1 then
+		n = n + 1
+	end
+	return concat(t, "_", 1, n)
 end
 
 ---Iterates over a table's keys in sorted order.
@@ -647,7 +730,7 @@ local function serialize(x)
 			for _, a in ipairs({ "x", "y", "z" }) do
 				insert(t, serialize(x[a]))
 			end
-			return format("Vec3(%s, %s, %s)", unpack(t))
+			return format("Vector3{ x = %s, y = %s, z = %s }", unpack(t))
 		else
 			return tostring(x)
 		end
@@ -815,14 +898,15 @@ local function setCameraLookAtOffset(preset, path, x, y, z)
 	local fallback = getCameraLookAtOffset(preset, path)
 	if not fallback or (equals(x, fallback.x) and equals(y, fallback.y) and equals(z, fallback.z)) then return end
 
+	local value = Vector3.new(x or fallback.x, y or fallback.y, z or fallback.z)
+
 	if get(preset, {}, "Overrides").Due and not custom_params[key] then
 		custom_params[key] = fallback
 		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.INFO, 811, Text.LOG_PARAM_CAM, key, serialize(fallback), serialize(Vector3.new(x, y, z)))
+			log(LogLevels.INFO, 811, Text.LOG_PARAM_CAM, key, serialize(fallback), serialize(value))
 		end
 	end
 
-	local value = Vector3.new(x or fallback.x, y or fallback.y, z or fallback.z)
 	TweakDB:SetFlat(key, value)
 end
 
@@ -864,7 +948,7 @@ local function resetCustomCameraParams(vehicle)
 
 			TweakDB:SetFlat(path, ref)
 
-			logF(DevLevels.BASIC, LogLevels.INFO, 833, Text.LOG_PARAM_MANIP, path, val, ref)
+			logF(DevLevels.ALERT, LogLevels.INFO, 833, Text.LOG_PARAM_MANIP, path, val, ref)
 		end
 
 		::continue::
@@ -886,7 +970,7 @@ local function restoreCustomCameraParams()
 				value, v = serialize(value), serialize(v)
 				log(LogLevels.INFO, 877, Text.LOG_PARAM_REST, k, value, v)
 			else
-				logF(DevLevels.BASIC, LogLevels.INFO, 878, Text.LOG_PARAM_REST, k, value, v)
+				logF(DevLevels.ALERT, LogLevels.INFO, 878, Text.LOG_PARAM_REST, k, value, v)
 			end
 		end
 	end
@@ -1831,7 +1915,7 @@ local function pushColors(idx, color)
 	ImGui.PushStyleColor(hoveredIdx, hover)
 	ImGui.PushStyleColor(activeIdx, active)
 
-	--Currently always 3; may become dynamic if more GUI elements are added someday.
+	--Currently always 3; may become dynamic someday.
 	return 3
 end
 
@@ -1841,6 +1925,27 @@ end
 local function popColors(num)
 	if num <= 0 then return end
 	ImGui.PopStyleColor(num)
+end
+
+---Adds centered text with custom word wrapping.
+---@param text string # The text to display.
+---@param wrap number # The maximum width before wrapping.
+local function addTextCenterWrap(text, wrap)
+	local ln, ww = "", ImGui.GetWindowSize()
+	for w in text:gmatch("%S+") do
+		local test = (ln == "") and w or (ln .. " " .. w)
+		if ImGui.CalcTextSize(test) > wrap and ln ~= "" then
+			ImGui.SetCursorPosX((ww - ImGui.CalcTextSize(ln)) * 0.5)
+			ImGui.Text(ln)
+			ln = w
+		else
+			ln = test
+		end
+	end
+	if ln ~= "" then
+		ImGui.SetCursorPosX((ww - ImGui.CalcTextSize(ln)) * 0.5)
+		ImGui.Text(ln)
+	end
 end
 
 ---Displays a tooltip when the current UI item is hovered.
@@ -1931,6 +2036,10 @@ end
 
 --This event is triggered when the CET environment initializes for a particular game session.
 registerForEvent("onInit", function()
+	--CET version check.
+	runtime_min = isRuntimeVersionAtLeast("1.35")
+	runtime_full = isRuntimeVersionAtLeast("1.35.1")
+
 	--Save default presets.
 	--[[
 	local defaults = {
@@ -1986,6 +2095,16 @@ end)
 
 --Display a simple GUI with some options.
 registerForEvent("onDraw", function()
+	--Notification system (requires at least CET 1.35.1).
+	if runtime_full and toaster_active and next(toaster_bumps) then
+		for k, v in pairs(toaster_bumps) do
+			local toast = ImGui.Toast.new(k, v)
+			ImGui.ShowToast(toast)
+		end
+		toaster_bumps = {}
+	end
+
+	--Stop when CET overlay is hidden.
 	if not overlay_open then return end
 
 	--Main window begins.
@@ -2003,6 +2122,16 @@ registerForEvent("onDraw", function()
 	--Minimum window width and height padding.
 	ImGui.Dummy(baseContentWidth, heightPadding)
 
+	--Warning for outdated CET version.
+	if not runtime_min and dev_mode <= DevLevels.DISABLED then
+		ImGui.Dummy(0, 0)
+		ImGui.SameLine()
+		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
+		addTextCenterWrap(format(Text.GUI_OLD_CET, GetVersion():gsub("^v", "")), contentWidth)
+		ImGui.PopStyleColor()
+		ImGui.Dummy(0, doubleHeightPadding)
+	end
+
 	--Checkbox to toggle mod functionality and handle enable/disable logic.
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
@@ -2015,11 +2144,11 @@ registerForEvent("onDraw", function()
 			applyPreset()
 			logF(DevLevels.ALERT, LogLevels.INFO, 1988, Text.LOG_MOD_ON)
 		else
-			dev_mode = DevLevels.DISABLED
 			editor_bundles = {}
 			restoreCustomCameraParams()
 			restoreAllPresets()
 			purgePresets()
+			dev_mode = DevLevels.DISABLED
 			logF(DevLevels.ALERT, LogLevels.INFO, 1988, Text.LOG_MOD_OFF)
 		end
 	end

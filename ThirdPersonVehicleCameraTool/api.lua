@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-04-24, 10:43 UTC+01:00 (MEZ)
+Version: 2025-04-28, 00:00 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -59,6 +59,7 @@ ______________________________________________
 ---@field SetNextWindowSize fun(width: number, height: number): nil # Sets the size for the next window before calling ImGui.Begin().
 ---@field GetFontSize fun(): number # Returns the height in pixels of the currently used font. Useful for vertical alignment calculations.
 ---@field GetCursorPosY fun(): number # Returns the current Y-position of the cursor within the window. Can be used to place elements precisely.
+---@field SetCursorPosX fun(x: number): nil # Sets the X-position of the cursor within the window. Useful for manual horizontal positioning of UI elements.
 ---@field SetCursorPosY fun(y: number): nil # Sets the Y-position of the cursor within the window. Use to manually position elements vertically.
 ---@field OpenPopup fun(id: string): nil # Opens a popup by identifier. Should be followed by ImGui.BeginPopup().
 ---@field BeginPopup fun(id: string): boolean # Starts a popup window with the given ID. Returns true if it should be drawn.
@@ -66,6 +67,8 @@ ______________________________________________
 ---@field EndPopup fun(): nil # Ends the current popup window. Always call after BeginPopup().
 ---@field PushStyleColor fun(idx: integer, color: integer): nil # Pushes a new color style override for the current ImGui context.
 ---@field PopStyleColor fun(count?: integer): nil # Removes one or more pushed style colors from the stack. Default count is 1.
+---@field PopStyleColor fun(count?: integer): nil # Removes one or more pushed style colors from the stack. Default count is 1.
+---@field ShowToast fun(toast: ImGui.Toast): nil # Displays a Toast notification instance immediately.
 ImGui = ImGui
 
 ---Flags used to configure ImGui window behavior and appearance.
@@ -103,6 +106,21 @@ ImGuiCol = ImGuiCol
 ---@class ImGuiStyle
 ---@field ItemSpacing { x: number, y: number } # Horizontal and vertical spacing between widgets.
 ImGuiStyle = ImGuiStyle
+
+---Enumerates the available types of Toast notifications for ImGui popups.
+---@class ImGui.ToastType
+---@field Success integer # A success notification, typically displayed in green.
+---@field Warning integer # A warning notification, typically displayed in yellow or orange.
+---@field Error integer # An error notification, typically displayed in red.
+---@field Info integer # An informational notification, typically displayed in blue.
+ImGui.ToastType = ImGui.ToastType
+
+---Creates a Toast notification instance.
+---@class ImGui.Toast
+---@field type integer # The Toast type, typically a value from `ImGui.ToastType`.
+---@field message string # The main text content of the Toast.
+---@field new fun(type: ImGui.ToastType, message: string): ImGui.Toast # Creates a new Toast with the specified type and message.
+ImGui.Toast = ImGui.Toast
 
 ---Bitwise operations (Lua 5.1 compatibility).
 ---@class bit32
@@ -171,3 +189,8 @@ spdlog = spdlog
 ---@class dir
 ---@field dir fun(path: string): table # Returns a list of file/folder entries in the specified directory. Each entry is a table with at least a `name` field.
 dir = dir
+
+---Provides version information about the currently running runtime environment.
+---@class GetVersion
+---@field GetVersion fun(): string # Returns the runtime version as a string, typically formatted like "v1.2.3.4".
+GetVersion = GetVersion
