@@ -1,0 +1,1 @@
+return{ID="4w_Archer_Hella",Close={y=1.15},Medium={y=1.1},Far={y=0.9}}

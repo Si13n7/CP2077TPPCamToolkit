@@ -1,0 +1,1 @@
+return{ID="4w_Makigai",Close={y=0.7,z=1.0},Medium={y=0.5,z=1.2},Far={y=0.3}}
