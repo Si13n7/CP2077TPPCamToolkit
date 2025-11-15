@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-09-20, 08:07 UTC+01:00 (MEZ)
+Version: 2025-09-24, 20:10 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -22,6 +22,7 @@ Naming Conventions in this codebase:
 	- PascalCase:           Constant arrays
 	- camelCase:            Local variables in code blocks (multi-word)
 	- flatcase:             Local variables in code blocks (single word/letters)
+	- Exceptions:           Game-defined names and terms
 
 Examples:
 	- mod_enabled (global variable)
@@ -1362,6 +1363,7 @@ local function logF(mode, lvl, id, fmt, ...)
 	if mode <= DevLevels.DISABLED then return end
 	local prev = dev_mode
 	dev_mode = prev < mode and mode or prev
+	log_suspend = false
 	log(lvl, id, fmt, ...)
 	dev_mode = prev
 end
@@ -1375,6 +1377,7 @@ end
 ---@vararg any # Optional arguments for formatting the message. Tables and userdata will be serialized automatically.
 local function logIf(mode, lvl, id, fmt, ...)
 	if dev_mode == DevLevels.DISABLED or dev_mode < mode then return end
+	log_suspend = false
 	log(lvl, id, fmt, ...)
 end
 
@@ -1414,6 +1417,16 @@ end
 
 --#region 🚗 Vehicle Metadata
 
+---Returns a list of all player vehicles from the game database.
+---@return TDBID[] # An array of all vehicle records.
+local function getPlayerVehicles()
+	local cache = vehicle_cache.getPlayerVehicles
+	if cache then return cache end
+	cache = TweakDB:GetFlat("Vehicle.vehicle_list.list") or {}
+	vehicle_cache.getPlayerVehicles = cache
+	return cache
+end
+
 ---Returns the number of vanilla vehicles in the game, depending on the game version.
 ---@return number # The total count of vanilla vehicles.
 local function getVanillaVehicleCount()
@@ -1424,39 +1437,14 @@ local function getVanillaVehicleCount()
 	return cache
 end
 
----Returns a list of all player vehicles from the game database.
----@param excludeVanilla boolean? # If true, vanilla vehicles are excluded from the result.
----@return TDBID[] # An array of all vehicle records.
-local function getPlayerVehicles(excludeVanilla)
-	local cache = shared_cache.getPlayerVehicles or {}
-	local full, part = 0, 1
-	local index = excludeVanilla and part or full
-	if cache[index] then return cache[index] end
-
-	cache[full] = TweakDB:GetFlat("Vehicle.vehicle_list.list") or {}
-	if not excludeVanilla then
-		shared_cache.getPlayerVehicles = cache
-		return cache[full]
-	end
-
-	local skip = getVanillaVehicleCount()
-	cache[part] = {}
-	for i, v in ipairs(cache[full]) do
-		if i > skip then
-			insert(cache[part], v)
-		end
-	end
-	shared_cache.getPlayerVehicles = cache
-	return cache[part]
-end
-
 ---Finds the name of a vehicle based on its TweakDB ID.
 ---@param tid TDBID # The TweakDB ID of the vehicle to look up.
 ---@return string? # The vehicle name if found and valid, otherwise nil.
 local function findVehicleName(tid)
 	if not tid or not isNumber(tid.hash) then return nil end
 
-	for _, v in ipairs(getPlayerVehicles()) do
+	local vehicles = getPlayerVehicles()
+	for _, v in ipairs(vehicles) do
 		if v.hash == tid.hash then
 			local name = getRecordName(v)
 			if isStringValid(name) then
@@ -1475,7 +1463,7 @@ end
 local function getVehicleApperancesByName(name)
 	if not isStringValid(name) then return nil end
 
-	local path = TweakDB:GetFlat(name .. ".entityTemplatePath")
+	local path = TweakDB:GetFlat(format("Vehicle.%s.entityTemplatePath", name))
 	if not path then return nil end
 
 	---@diagnostic disable-next-line
@@ -1512,6 +1500,50 @@ local function findVehicleApperanceByName(name, key, steps)
 	end
 
 	return nil
+end
+
+---Builds a map of player vehicles to their unique appearance names. Optionally skips vanilla vehicles.
+---@param skipVanilla boolean # If true, vanilla vehicles will be skipped.
+---@return table? # A table where keys are vehicle names and values are tables of appearance names as keys with `true` as value.
+local function getVehiclesNameMap(skipVanilla)
+	local vehicles = getPlayerVehicles()
+	if nilOrEmpty(vehicles) then return end
+
+	local length = #vehicles
+	local start = skipVanilla and getVanillaVehicleCount() + 1 or 1
+	start = (start > length) and 1 or start
+
+	local seen = {}
+	local result = {}
+	for i = start, length do
+		local name = TDBID.ToStringDEBUG(vehicles[i])
+		if nilOrEmpty(name) then goto continue end ---@cast name string
+
+		name = name:gsub("^Vehicle%.", "")
+		if nilOrEmpty(name) or seen[name] then goto continue end
+
+		seen[name] = true
+		result[name] = result[name] or {}
+
+		local apps = getVehicleApperancesByName(name)
+		if nilOrEmpty(apps) then goto continue end ---@cast apps table
+
+		for x = 1, #apps, 1 do
+			local raw = apps[x]
+			local app = raw and raw.name or nil
+			if app then
+				local appName = Game.NameToString(app)
+				if not seen[appName] then
+					seen[appName] = true
+					result[name][appName] = true
+				end
+			end
+		end
+
+		::continue::
+	end
+
+	return result
 end
 
 ---Checks if the player is currently inside a vehicle.
@@ -1813,47 +1845,48 @@ local function updateDefaultParams(restore)
 	if not areTableValid(DefaultParamKeys, global_params) then return end
 
 	for varName, data in pairs(global_params) do
-		for _, baseKey in ipairs(DefaultParamKeys) do
-			local key = baseKey .. "." .. varName
-			local value = TweakDB:GetFlat(key)
-			if value == nil then
-				if data.IsSpecial then
-					data.Value = data.Value or data.Default
-				end
-				goto continue
-			end
+		if data.IsSpecial then
+			data.Value = data.Value or data.Default
+			goto continue
+		end
 
-			local isNum = isNumber(value)
+		for _, baseKey in ipairs(DefaultParamKeys) do
+			local key = format("%s.%s", baseKey, varName)
+			local current = TweakDB:GetFlat(key)
+			if current == nil then goto continue end
+
+			local isNum = isNumber(current)
 			local hasMinMax = areNumber(data.Min, data.Max)
 			if isNum and hasMinMax then
-				value = min(max(value, data.Min), data.Max)
+				current = min(max(current, data.Min), data.Max)
 			end
-
-			if data.Default == nil then data.Default = value end
-
-			if data.Value == nil then data.Value = value end
-
-			if type(value) ~= type(data.Value) then
+			if data.Default == nil then
+				data.Default = current
+			end
+			if data.Value == nil then
+				data.Value = current
+			end
+			if type(current) ~= type(data.Value) then
 				data.Value = isNum and (data.Value and 1 or 0) or ((data.Value or 0) > 0)
 			end
 
 			if restore then
-				if value ~= data.Default then
+				if current ~= data.Default then
 					TweakDB:SetFlat(key, data.Default)
+					logIf(DevLevels.ALERT, LogLevels.INFO, 0x602e, Text.LOG_PARAM_REST, key, data.Default)
 				end
 				goto continue
 			end
 
-			if value == data.Value then goto continue end
-
-			if isNum and hasMinMax then
-				TweakDB:SetFlat(key, min(max(data.Value, data.Min), data.Max))
-			else
-				TweakDB:SetFlat(key, data.Value)
-			end
+			if current == data.Value then goto continue end
+			local value = isNum and hasMinMax and min(max(data.Value, data.Min), data.Max) or data.Value
+			TweakDB:SetFlat(key, value)
+			logIf(DevLevels.ALERT, LogLevels.INFO, 0x602e, Text.LOG_PARAM_SET, key, value)
 
 			::continue::
 		end
+
+		::continue::
 	end
 end
 
@@ -2084,7 +2117,6 @@ local function resetCustomDefaultParams(key)
 			end
 
 			TweakDB:SetFlat(cKey, ref)
-
 			logF(DevLevels.BASIC, LogLevels.INFO, 0x460a, Text.LOG_PARAM_MANIP, cKey, val, ref, rKey)
 		end
 
@@ -2117,7 +2149,6 @@ local function resetCustomCameraVars(key, preset)
 
 			custom_params[ckey] = val
 			TweakDB:SetFlat(ckey, def)
-
 			logF(DevLevels.BASIC, LogLevels.INFO, 0x810b, Text.LOG_PARAM_MANIP, ckey, val, def, dkey)
 
 			::continue::
@@ -2547,9 +2578,9 @@ end
 ---@param file string # The preset filename (with `.lua` extension).
 ---@param folder string # Directory where the preset file is located.
 ---@param count integer # Current number of successfully loaded presets.
----@param vehicles table? # Optional list of vehicles to validate the preset against.
+---@param vehicleMap table? # Optional map of vehicle names and their apperance names to validate the preset against.
 ---@return integer # Updated count of successfully loaded presets.
-local function loadPresetFile(file, folder, count, vehicles)
+local function loadPresetFile(file, folder, count, vehicleMap)
 	if not mod_enabled or not file or not hasLuaExt(file) then return count end
 
 	local key = trimLuaExt(file)
@@ -2560,25 +2591,27 @@ local function loadPresetFile(file, folder, count, vehicles)
 	end
 
 	--Ensures that presets are only loaded for vehicles that are actually installed.
-	if isTableValid(vehicles) then ---@cast vehicles table
-		local isValid = false
+	if vehicleMap then ---@cast vehicleMap table<string, table<string, boolean>>
+		local isValid = vehicleMap[key] ~= nil
 
-		local start = getVanillaVehicleCount() + 1
-		local length = #vehicles
-		start = (start > length) and 1 or start
-		for i = start, length do
-			local name = findVehicleName(vehicles[i])
-			if isStringValid(name) then ---@cast name string
-				local search = "Vehicle." .. key
-				if startsWith(name, search) or findVehicleApperanceByName(name, key, 1) then
+		if not isValid then
+			for name, appNames in pairs(vehicleMap) do
+				if appNames[key] or startsWith(name, key) then
 					isValid = true
 					break
 				end
+				for appName in pairs(appNames) do
+					if startsWith(appName, key) then
+						isValid = true
+						break
+					end
+				end
+				if isValid then break end
 			end
 		end
 
 		if not isValid then
-			log(LogLevels.INFO, 0x0305, Text.LOG_PSET_IGNORED, key, folder, file)
+			logIf(DevLevels.ALERT, LogLevels.INFO, 0x0305, Text.LOG_PSET_IGNORED, key, folder, file)
 			return count
 		end
 	end
@@ -2641,7 +2674,6 @@ local function loadPresetsFrom(path)
 				logF(DevLevels.FULL, LogLevels.ERROR, 0x98e0, Text.LOG_PSETS_DEF_BROKEN)
 			end
 
-			log_suspend = false
 			local text = isDef and Text.LOG_PSETS_LOAD_DEF or Text.LOG_PSETS_LOAD_VAN
 			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, text, count, #files - 1)
 			return
@@ -2650,27 +2682,36 @@ local function loadPresetsFrom(path)
 		local task = presets_loader_task
 		task.isActive = true
 
+		local isBusy = false
+
+		local length = #files - 1
+		local limit = ceil(length / 3)
 		local index, file
+
 		local startTime = os.clock()
 		local endTime = startTime
-		local vehicles = getPlayerVehicles(noVan)
 
-		callAsync(0, function(id)
-			index, file = next(files, index)
-			if not file then
-				callHalt(id)
-				task.isActive = false
-				endTime = os.clock()
-				return
+		local nameMap = getVehiclesNameMap(true)
+		callAsync(0.1, function(id)
+			if isBusy then return end
+			isBusy = true
+			for _ = 1, limit do
+				index, file = next(files, index)
+				if not file then
+					callHalt(id)
+					task.isActive = false
+					endTime = os.clock()
+					return
+				end
+				count = loadPresetFile(file.name, path, count, nameMap)
 			end
-			count = loadPresetFile(file.name, path, count, vehicles)
+			isBusy = false
 		end)
 
 		callAsync(1, function(id)
 			if task.isActive then return end
+			callHalt(id)
 
-			local length = #files - 1
-			log_suspend = false
 			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_CUS, count, length)
 			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_IGNO, length - count)
 			logF(DevLevels.ALERT, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_DONE, endTime - startTime)
@@ -2678,8 +2719,6 @@ local function loadPresetsFrom(path)
 			if isFunction(task.finalCall) then
 				task.finalCall()
 			end
-
-			callHalt(id)
 		end)
 
 		return
@@ -2693,11 +2732,11 @@ end
 ---@param refresh boolean? # Whether to clear existing presets before loading.
 ---@param delay number? # Optional delay before execution.
 local function loadPresets(refresh, delay)
+	if refresh then purgePresets() end
+
 	delay = (isNumber(delay) and delay > 0) and delay or 0
 	callAsync(delay, function(id)
 		callHalt(id)
-
-		if refresh then purgePresets() end
 		loadPresetsFrom(PresetFolders.DEFAULTS)
 		loadPresetsFrom(PresetFolders.VANILLA)
 		loadPresetsFrom(PresetFolders.CUSTOM)
@@ -3752,7 +3791,6 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 				if not dirs[i] then goto continue end
 
 				local ok, err = os.remove(path)
-				log_suspend = false
 				if ok then
 					for n in pairs(editor_bundles) do
 						local parts = split(n, "*")
@@ -3818,12 +3856,20 @@ local function onInit()
 
 	local task = presets_loader_task
 	if isTableValid(task) and not isFunction(task.finalCall) then
+		--Workaround to query all custom vehicle appearances. I'm not sure
+		--if this is a CET bug or intended behavior, but it doesn't seem to
+		--matter when I call it, on the first access after CET starts, only
+		--about half of the appearances that should be available are returned.
+		--So we have to force a query once and discard the result.
+		_ = getVehiclesNameMap(true)
+
 		task.finalCall = function()
 			clearLastEditorBundle()
 			vehicle_cache = {}
 			applyPreset()
 		end
 	end
+
 	loadPresets(true, 5)
 end
 
@@ -3835,7 +3881,6 @@ local function onUnmount(force)
 	if not force and not mod_enabled then return end
 
 	log_suspend = false
-
 	if not force and dev_mode >= DevLevels.ALERT then
 		log(LogLevels.INFO, 0x9dee, Text.LOG_EVNT_UMNT)
 	end
@@ -3940,7 +3985,6 @@ registerForEvent("onInit", function()
 		if not mod_enabled or not isVehicleMounted() or isTableValid(vehicle_cache) then
 			return
 		end
-		log_suspend = false
 		logIf(DevLevels.ALERT, LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_MNT)
 		updateDefaultParams()
 		applyPreset()
@@ -4098,7 +4142,6 @@ registerForEvent("onDraw", function()
 	if isEnabled ~= mod_enabled then
 		mod_enabled = isEnabled
 		if isEnabled then
-			log_suspend = false
 			onInit()
 			logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_MOD_ON)
 		else
@@ -4661,7 +4704,6 @@ local function repairVanillaPresetFilesAsyncTask()
 					local ok, result = pcall(chunk)
 					if not ok or not result or not isStringValid(result.ID) then break end
 
-					log_suspend = false
 					vehicle_cache.getVehicleStatus = 1
 					savePreset(key, result, true)
 					vehicle_cache.getVehicleStatus = nil
