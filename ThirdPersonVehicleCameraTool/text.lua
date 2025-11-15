@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-04-23, 00:00 UTC+01:00 (MEZ)
+Version: 2025-04-22, 10:38 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -43,14 +43,17 @@ return {
 	GUI_TBL_LABL_VEH_TIP = "The name of the vehicle.",
 	GUI_TBL_LABL_APP_TIP = "The appearance name of the vehicle.",
 	GUI_TBL_LABL_CAMID_TIP = "The camera settings identifier used by this vehicle.",
-	GUI_TBL_LABL_OKEY_TIP = "Override key used by this vehicle to apply custom camera settings.",
+	GUI_TBL_LABL_OKEY_TIP = "The key used to access the camera settings in TweakDB.",
+	GUI_TBL_LABL_OLVLS_TIP = "The camera levels combined with the key to access camera settings in TweakDB.",
 	GUI_TBL_LABL_PSET_TIP = "The active camera preset applied to this vehicle.",
 	GUI_TBL_LABL_CLO_TIP = "Camera Distance: Close",
 	GUI_TBL_LABL_MID_TIP = "Camera Distance: Medium",
 	GUI_TBL_LABL_FAR_TIP = "Camera Distance: Far",
 
 	--GUI: Table Value Tooltips
-	GUI_TBL_VAL_PSET_TIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of Vehicle or Appearance, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} Vehicle: (e.g. \"%s\")\n\u{f0b3b}\u{f07ac} Appearance: (e.g. \"%s\")\n\u{f0b3c}\u{f010b} Prefix of Vehicle: (e.g. \"%s\")\n\u{f0b3d}\u{f07ac} Prefix of Appearance: (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority, otherwise, you will need to delete the one that will steal its priority. Take a look at the Preset File Manager to delete presets.\nAfter renaming a preset, it may be necessary to reload all presets for the renamed one to become available for other vehicles.",
+	GUI_TBL_VAL_OKEY_TIP = "This key appears in the vehicle's Tweak YAML file if it overrides 'Camera.VehicleTPP', and you must use the full name without the camera level, for example, \"Low_Close\".",
+	GUI_TBL_VAL_OLVLS_TIP = "These levels appear in the vehicle's Tweak YAML file if it overrides 'Camera.VehicleTPP'. You need to enter all available levels here, separated by commas. The order must always follow the pattern: Close, Medium, Far, repeated in that exact sequence. The total number of entries must be divisible by 3. If any levels are missing, you must add dummy entries to keep the correct sequence.",
+	GUI_TBL_VAL_PSET_TIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of Vehicle or Appearance, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} Vehicle: (e.g. \"%s\")\n\u{f0b3b}\u{f07ac} Appearance: (e.g. \"%s\")\n\u{f0b3c}\u{f010b} Prefix of Vehicle: (e.g. \"%s\")\n\u{f0b3d}\u{f07ac} Prefix of Appearance: (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority, otherwise, you will need to delete the one that will steal its priority. Take a look at the Preset File Manager to delete presets.",
 	GUI_TBL_VAL_ANG_TIP = "Default:|%d|Min:|%d|Max:|%d|In Use:|%d",
 	GUI_TBL_VAL_X_TIP = "Default:|%.3f|Min:|%.3f|Max:|%.3f|In Use:|%.3f|Decrease:|Left|Increase:|Right",
 	GUI_TBL_VAL_Y_TIP = "Default:|%.3f|Min:|%.3f|Max:|%.3f|In Use:|%.3f|Decrease:|Farther|Increase:|Closer",
@@ -80,6 +83,7 @@ return {
 	--LOG: Warnings
 	LOG_BLANK_NAME = "The new preset name cannot be blank.",
 	LOG_CLEAR_PSETS = "Cleared all loaded camera offset presets.",
+	LOG_CLEAR_NPSETS = "Cleared %d loaded camera offset presets whose keys started with '%s'.",
 	LOG_FILE_EXIST = "File '%s' already exists, and overwrite is disabled.",
 	LOG_NO_PSET_FOUND = "No preset found.",
 	LOG_NAMES_MISM = "The new preset name must be '%s', '%s', or a prefix of one of them; otherwise, it will not be applied and will be ignored.",

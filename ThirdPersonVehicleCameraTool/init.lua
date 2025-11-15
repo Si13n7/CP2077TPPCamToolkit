@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-23, 00:00 UTC+01:00 (MEZ)
+Version: 2025-04-22, 10:38 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -71,12 +71,14 @@ local LogLevels = {
 ---@field CARAMEL integer # Caramel is a warm, golden brown with rich amber tones.
 ---@field FIR integer # Fir is a dark, cool green with subtle blue undertones.
 ---@field GARNET integer # Garnet is a deep, muted red with a subtle brown undertone.
+---@field MULBERRY integer # Mulberry is a deep, muted purple with rich red undertones and a cool, berry-like hue.
 ---@field OLIVE integer # Olive is a muted yellow-green with an earthy, natural tone.
 ---@type ColorEnum
 local Colors = {
 	CARAMEL = 0x8a295c7a,
 	FIR = 0x8a6a7a29,
 	GARNET = 0x8a29297a,
+	MULBERRY = 0x8a68297a,
 	OLIVE = 0x8a297a68
 }
 
@@ -194,6 +196,9 @@ local padding_locked
 ---Each entry tracks editor data and preset version states for the given vehicle.
 ---@type table<string, IEditorBundle|nil>
 local editor_bundles = {}
+
+---@type number
+local editor_secret = 0
 
 ---Determines whether overwriting the preset file is allowed.
 ---@type boolean
@@ -445,6 +450,22 @@ local function trimLuaExt(s)
 	return hasLuaExt(s) and s:gsub("%.lua$", "") or s
 end
 
+---Splits a string into a list of substrings using a specified separator.
+---@param s string? # The input string to split. If nil, returns an empty table.
+---@param sep string? # The separator to split by (default: ",").
+---@param trim boolean? # If true, trims whitespace from each resulting entry.
+---@return string[] # A list of substrings resulting from the split.
+local function split(s, sep, trim)
+	if not s then return {} end
+	s = tostring(s)
+	sep = sep or ","
+	local t = {}
+	for v in s:gmatch("([^" .. sep .. "]+)") do
+		insert(t, trim and v:match("^%s*(.-)%s*$") or v)
+	end
+	return t
+end
+
 ---Iterates over a table's keys in sorted order.
 ---Useful for producing stable output or consistent serialization.
 ---@param t table # The table to iterate over.
@@ -536,20 +557,6 @@ local function pick(i, ...)
 	else
 		return select(len, ...)
 	end
-end
-
----Splits a string into a list of substrings using a specified separator.
----@param s string? # The input string to split. If nil, returns an empty table.
----@param sep string? # The separator to split by (default: ",").
----@return string[] # A list of substrings resulting from the split.
-local function split(s, sep)
-	if not s then return {} end
-	sep = sep or ","
-	local t = {}
-	for v in s:gmatch("([^" .. sep .. "]+)") do
-		insert(t, v)
-	end
-	return t
 end
 
 ---Converts any value to a readable string representation.
@@ -1135,10 +1142,27 @@ local function presetFileExists(name, isDefault)
 	return fileExists(path)
 end
 
----Clears all currently loaded camera offset presets.
-local function purgePresets()
-	camera_presets = {}
-	log(LogLevels.WARN, Text.LOG_CLEAR_PSETS)
+---Removes camera presets from the global `camera_presets` table.
+---If no key is provided, clears all presets
+---If a key is provided, removes only entries whose keys start with the given prefix.
+---@param key string? # Optional key prefix used to filter which presets to remove.
+local function purgePresets(key)
+	if not isString(key) then
+		camera_presets = {}
+		log(LogLevels.WARN, Text.LOG_CLEAR_PSETS)
+		return
+	end
+
+	---@cast key string
+	local c = 0
+	for k, _ in pairs(camera_presets) do
+		if startsWith(k, key) then
+			camera_presets[k] = nil
+			c = c + 1
+		end
+	end
+
+	log(LogLevels.WARN, Text.LOG_CLEAR_NPSETS, c, key)
 end
 
 ---Loads camera offset presets from `defaults` (first) and `presets` (second).
@@ -1262,14 +1286,14 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 		return false
 	end
 
-	local overrides = get(camera_presets, nil, name, "Overrides")
-	if isTable(overrides) then
-		local serialized = serialize(overrides)
-		insert(parts, format("Overrides=%s", serialized))
-	end
-
 	if saveAsDefault then
 		insert(parts, "IsDefault=true")
+	else
+		local overrides = get(camera_presets, nil, name, "Overrides")
+		if isTable(overrides) then
+			local serialized = serialize(overrides)
+			insert(parts, format("Overrides=%s", serialized))
+		end
 	end
 
 	local last = parts[#parts]
@@ -1733,12 +1757,44 @@ registerForEvent("onDraw", function()
 		ImGui.TableSetupColumn("\u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
-		local overrides = get(camera_presets, {}, key, "Overrides")
+		local original = get(camera_presets, {}, key)
+		local overrides = get(original, {}, "Overrides")
+
+		--Toggles sectret override mode if any row value is right-clicked rapidly up to 10 times.
+		--This mode is not intended for mainstream use, as it cannot be implemented in a foolproof way.
+		if isTable(original) and editor_secret >= 10 then
+			editor_secret = 0
+			if not isString(overrides.Key) or not isTable(overrides.Levels) then
+				original.Overrides = {
+					Key = name,
+					Levels = clone(CameraLevels)
+				}
+				overrides = original.Overrides
+			else
+				original.Overrides = nil
+				overrides = nil
+			end
+		end
+
 		local rows = {
 			{ label = "\u{f010b}", tip = Text.GUI_TBL_LABL_VEH_TIP,   value = name },
 			{ label = "\u{f07ac}", tip = Text.GUI_TBL_LABL_APP_TIP,   value = appName },
 			{ label = "\u{f0567}", tip = Text.GUI_TBL_LABL_CAMID_TIP, value = id },
-			{ label = "\u{f0569}", tip = Text.GUI_TBL_LABL_OKEY_TIP,  value = overrides.Key },
+			{
+				label = "\u{f0569}",
+				tip = Text.GUI_TBL_LABL_OKEY_TIP,
+				value = overrides.Key,
+				valTip = Text.GUI_TBL_VAL_OKEY_TIP,
+				override = true
+			},
+			{
+				label = "\u{f0ed2}",
+				tip = Text.GUI_TBL_LABL_OLVLS_TIP,
+				value = isTable(overrides.Levels) and concat(overrides.Levels, ",") or nil,
+				valTip = Text.GUI_TBL_VAL_OLVLS_TIP,
+				isArray = true,
+				override = true
+			},
 			{
 				label    = "\u{f1952}",
 				tip      = Text.GUI_TBL_LABL_PSET_TIP,
@@ -1748,8 +1804,9 @@ registerForEvent("onDraw", function()
 			}
 		}
 
+		local maxInputWidth = floor((contentWidth - 38) * scale)
 		for _, row in ipairs(rows) do
-			if row.value == nil then goto continue end
+			if not isString(row.label, row.value) then goto continue end
 
 			ImGui.TableNextRow(0, rowHeight)
 			ImGui.TableSetColumnIndex(0)
@@ -1760,10 +1817,27 @@ registerForEvent("onDraw", function()
 
 			ImGui.TableSetColumnIndex(1)
 
-			if row.editable then
+			if row.override then
+				ImGui.PushItemWidth(maxInputWidth)
+				local pushd = pushColors(ImGuiCol.FrameBg, Colors.MULBERRY)
+
+				local newVal, changed = ImGui.InputText("##Override" .. row.label, row.value, 256)
+				if changed and newVal then
+					if row.isArray then
+						overrides.Levels = split(newVal, ",", true)
+					else
+						overrides.Key = trimLuaExt(newVal)
+					end
+				end
+
+				popColors(pushd)
+				ImGui.PopItemWidth()
+
+				addTooltip(row.valTip)
+			elseif row.editable then
 				local namWidth, _ = ImGui.CalcTextSize(name)
 				local appWidth, _ = ImGui.CalcTextSize(appName)
-				local width = min(max(namWidth, appWidth), floor(contentWidth - 32 * scale)) + ceil(8 * scale)
+				local width = min(max(namWidth, appWidth), maxInputWidth) + ceil(8 * scale)
 				ImGui.PushItemWidth(width)
 
 				local color
@@ -1774,8 +1848,8 @@ registerForEvent("onDraw", function()
 				else
 					color = Colors.CARAMEL
 				end
-
 				local pushd = row.value ~= id and pushColors(ImGuiCol.FrameBg, color) or 0
+
 				local newVal, changed = ImGui.InputText("##FileName", row.value, 96)
 				if changed and newVal then
 					local trimVal = trimLuaExt(newVal)
@@ -1789,7 +1863,10 @@ registerForEvent("onDraw", function()
 						end
 					end
 				end
+
 				popColors(pushd)
+				ImGui.PopItemWidth()
+
 				addTooltip(format(
 					row.valTip,
 					color == Colors.CARAMEL and flux.Name or key,
@@ -1798,10 +1875,16 @@ registerForEvent("onDraw", function()
 					chopUnderscoreParts(name),
 					chopUnderscoreParts(appName)
 				))
-				ImGui.PopItemWidth()
 			else
 				alignVertNext(rowHeight)
 				ImGui.Text(tostring(row.value or Text.GUI_NONE))
+
+				--Count right-clicks to determine when critical editability features should be unlocked.
+				if ImGui.IsItemClicked(1) then
+					editor_secret = editor_secret + 1
+				else
+					editor_secret = max(0, editor_secret - 0.01)
+				end
 			end
 
 			::continue::
