@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-09-15, 12:46 UTC+01:00 (MEZ)
+Version: 2025-09-16, 19:16 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -76,6 +76,7 @@ return {
 	GUI_FMAN_DEL_CONFIRM = "Delete file \"%s\"?",
 	GUI_FMAN_NO_PSETS = "No presets have been created yet.",
 	GUI_FMAN_NAME_TIP = "\u{f08b1} %s",
+	GUI_FMAN_SEARCH_TIP = "\u{f0232} Filter Commands| |%s|Shows files of vehicles available in the game|%s|Shows files of vehicles not available in the game|%s|Shows files of vehicles that exist but have never been used|%s|Shows files of vehicles that have been actively used",
 	GUI_FMAN_USAGE_TIP = "\u{f0520} Usage History| |First Used:|%s|Last Used:|%s|Total Uses:|%d",
 
 	--LOG: ℹ️ Info
@@ -108,7 +109,9 @@ return {
 	LOG_CAMID_MISM = "Camera ID mismatch: preset '%s' vs. vehicle '%s'.",
 	LOG_CLEAR_NPSETS = "Cleared %d loaded camera offset presets whose keys started with '%s'.",
 	LOG_CLEAR_PSETS = "Cleared all loaded camera offset presets.",
+	LOG_FAIL_EXE = "Failed to execute preset '%s/%s'.",
 	LOG_FILE_EXIST = "File '%s' already exists, and overwrite is disabled.",
+	LOG_IGNO_PSET = "Ignoring preset (required mod not installed): '%s' ('%s/%s').",
 	LOG_MISS_DEF = "Default preset '%s' could not be found.",
 	LOG_NAME_MISM = "The new preset name must be '%s' or a prefix of it; otherwise, it will not be applied and will be ignored.",
 	LOG_NAMES_MISM = "The new preset name must be '%s', '%s', or a prefix of one of them; otherwise, it will not be applied and will be ignored.",
@@ -123,9 +126,9 @@ return {
 	LOG_DEFS_INCOMP = "The default presets are incomplete.",
 	LOG_DEL_FAILURE = "Failed to delete preset '%s'. %s",
 	LOG_DIR_NOT_EXIST = "You cannot delete the entire directory under '%s'.",
-	LOG_INV_RECID = "Vehicle record ID is inavlid: '%s'.",
 	LOG_FAIL_APPLY = "Could not apply preset: incomplete parameters ('%s').",
 	LOG_FAIL_LOAD = "Failed to load preset '%s/%s': '%s'.",
+	LOG_INV_RECID = "Vehicle record ID is inavlid: '%s'.",
 	LOG_MOVE_FAILURE = "Failed to rename preset '%s' to '%s'. %s",
 	LOG_NO_APP = "The vehicle's appearance could not be found.",
 	LOG_NO_CAM_OSET = "Could not retrieve camera offset: '%s'.",

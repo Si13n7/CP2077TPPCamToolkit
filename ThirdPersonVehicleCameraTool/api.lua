@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-09-07, 12:48 UTC+01:00 (MEZ)
+Version: 2025-09-16, 19:16 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -153,6 +153,7 @@ TDBID = TDBID
 ---@class Game
 ---@field NameToString fun(value: any): string # Converts a game name object to a readable string.
 ---@field GetPlayer fun(): Player? # Retrieves the current player instance if available.
+---@field GetVehicleSystem fun(): VehicleSystem # Retrieves the singleton instance of the VehicleSystem.
 ---@field GetMountedVehicle fun(player: Player): Vehicle? # Returns the vehicle the player is currently mounted in, if any.
 Game = Game
 
@@ -160,6 +161,11 @@ Game = Game
 ---@class Player
 ---@field SetWarningMessage fun(self: Player, message: string, duration: number) # Displays a warning message on the player's screen for a specified duration.
 Player = Player
+
+---Provides access to vehicle-related systems, including retrieval of player-owned vehicles.
+---@class VehicleSystem
+---@field GetPlayerVehicles fun(self: VehicleSystem): Vehicle[] # Returns an array of all vehicles currently owned/unlocked by the player.
+VehicleSystem = VehicleSystem
 
 ---Represents a vehicle entity within the game, providing functions to interact with it, such as getting the appearance name.
 ---@class Vehicle

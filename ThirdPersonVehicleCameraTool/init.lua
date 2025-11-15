@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-09-15, 12:46 UTC+01:00 (MEZ)
+Version: 2025-09-16, 19:16 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -85,7 +85,7 @@ ______________________________________________
 ---@field Far IOffsetData? # The offset data for far camera view.
 ---@field IsDefault boolean? # Determines whether this camera preset is a default one.
 ---@field IsJoined boolean? # Determines whether this camera preset was newly generated as a default.
----@field IsVanilla boolean? # Determines whether this camera preset comes from a vanilla vehicle. This flag must be set manually in the file and is used by the option to disable all vanilla presets at once.
+---@field IsVanilla boolean? # Determines whether this camera preset comes from a vanilla vehicle. This flag must be set manually in the file.
 
 ---Represents usage statistics for a camera preset.
 ---@class IPresetUsage
@@ -297,6 +297,22 @@ local VehicleLookup = {
 	[0x1728CA71] = "Vehicle.v_utility4_chevalier_legatus_player"
 }
 
+---Represents search filter command constants.
+---@type table<string, string>
+local SearchCommands = {
+	---Presets of vehicles that are available in the game.
+	INSTALLED = ":installed",
+
+	---Presets of vehicles not available in the game.
+	UNAVAILABLE = ":unavailable",
+
+	---Presets of vehicles that exist but have never been used.
+	INACTIVE = ":inactive",
+
+	---Presets of vehicles that were actively used.
+	ACTIVE = ":active"
+}
+
 ---Determines whether the mod is enabled.
 ---@type boolean
 local mod_enabled = true
@@ -446,7 +462,7 @@ local file_man_open = false
 
 ---Search query entered in the Preset File Manager.
 ---@type string?
-local file_man_search
+local file_man_search = SearchCommands.INSTALLED
 
 --#endregion
 
@@ -2267,7 +2283,16 @@ local function loadPresets(refresh)
 			return -1
 		end
 
-		local isDef = path == "defaults"
+		local fromDefDir = path == "defaults"
+		local skipVanilla = false
+		local vehicles = nil
+		if not fromDefDir then
+			skipVanilla = get(global_params, false, "noVanilla", "Value")
+
+			local vs = Game.GetVehicleSystem()
+			vehicles = vs and vs:GetPlayerVehicles() or {}
+		end
+
 		local count = 0
 		for _, entry in ipairs(files) do
 			local name = entry.name
@@ -2288,7 +2313,44 @@ local function loadPresets(refresh)
 			end
 
 			local ok, result = pcall(chunk)
-			if not ok or (isDef and not result.IsDefault) or not setPresetEntry(key, result) then
+			if not ok or not result then
+				logF(DevLevels.BASIC, LogLevels.WARN, 0x372a, Text.LOG_FAIL_EXE, path, name)
+
+				local success, error = pcall(os.remove, file)
+				if success then
+					logF(DevLevels.BASIC, LogLevels.INFO, 0x372a, Text.LOG_DEL_SUCCESS, file)
+				else
+					logF(DevLevels.BASIC, LogLevels.WARN, 0x372a, Text.LOG_DEL_FAILURE, file, error)
+				end
+
+				goto continue
+			end
+
+			local isVanilla = result.IsVanilla
+			if isVanilla and skipVanilla then goto continue end
+
+			local isValid = fromDefDir and result.IsDefault or isVanilla
+			if not isValid and isTableValid(vehicles) then
+				---@cast vehicles TDBID
+				for _, v in ipairs(vehicles) do
+					local vid = v.recordID
+					local vname = vid and (vid.hash and VehicleLookup[vid.hash] or TDBID.ToStringDEBUG(vid))
+					if isStringValid(vname) then
+						local search = "Vehicle." .. key
+						if vname == search or startsWith(vname, search) then
+							isValid = true
+							break
+						end
+					end
+				end
+			end
+
+			if not isValid then
+				log(LogLevels.INFO, 0x372a, Text.LOG_IGNO_PSET, key, path, name)
+				goto continue
+			end
+
+			if not setPresetEntry(key, result) then
 				logF(DevLevels.BASIC, LogLevels.ERROR, 0x372a, Text.LOG_BAD_PSET, path, name)
 				goto continue
 			end
@@ -2382,6 +2444,8 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 
 	if saveAsDefault then
 		insert(parts, "IsDefault=true")
+	elseif preset.IsVanilla then
+		insert(parts, "IsVanilla=true")
 	end
 
 	local last = parts[#parts]
@@ -2639,8 +2703,16 @@ local function applyEditorPreset(key, flux, pivot, tasks)
 
 	tasks.Apply = false
 
+	local isVanilla = false
+	if camera_presets[pivot.Key] then
+		isVanilla = camera_presets[pivot.Key].IsVanilla
+	end
+
 	camera_presets[pivot.Key] = nil
 	if not tasks.Restore then
+		if isVanilla then
+			flux.Preset.IsVanilla = true
+		end
 		camera_presets[key] = flux.Preset
 	end
 
@@ -3145,12 +3217,13 @@ end
 local function openFileManWindow(scale, controlPadding, halfHeightPadding, buttonHeight, x, y, w, h)
 	if not file_man_open or not areNumber(scale, controlPadding, halfHeightPadding, buttonHeight) then return end
 
-	local files = dir("presets")
+	local files = shared_cache.openFileManWindow or dir("presets")
 	if not files then
 		file_man_open = false
 		logF(DevLevels.FULL, LogLevels.ERROR, 0x970b, Text.LOG_DIR_NOT_EXIST, "presets")
 		return
 	end
+	shared_cache.openFileManWindow = files
 
 	if areNumber(x, y, w, h) then
 		---@cast x number
@@ -3186,12 +3259,29 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 			file_man_search = newVal
 		end
 		ImGui.PopItemWidth()
+		addTooltip(nil,
+			split(format(Text.GUI_FMAN_SEARCH_TIP,
+				SearchCommands.INSTALLED,
+				SearchCommands.UNAVAILABLE,
+				SearchCommands.INACTIVE,
+				SearchCommands.ACTIVE), "|"))
 
 		ImGui.EndTable()
 	end
 	ImGui.Dummy(0, halfHeightPadding)
 
 	local anyFiles = false
+
+	local command = nil
+	local search = (file_man_search or ""):lower()
+	for _, value in pairs(SearchCommands) do
+		if search == value then
+			command = value
+			search = ""
+			break
+		end
+	end
+
 	if ImGui.BeginTable("PresetFiles", 2, ImGuiTableFlags.Borders) then
 		ImGui.TableSetupColumn(" \u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableSetupColumn(" \u{f05e9}", ImGuiTableColumnFlags.WidthFixed)
@@ -3203,19 +3293,29 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 
 			anyFiles = true
 
-			local sp = (file_man_search or ""):lower()
-			if #sp > 0 and not f:lower():find(sp, 1, true) then
+			if #search > 0 and not f:lower():find(search, 1, true) then
 				goto continue
 			end
 
 			local k = trimLuaExt(f)
-			local usage = preset_usage[k]
 			local c
-			if not contains(camera_presets, k) then
+			if not camera_presets[k] then
+				if isStringValid(command) and command ~= SearchCommands.UNAVAILABLE then
+					goto continue
+				end
+
 				c = Colors.GARNET
-			elseif isTable(usage) then
+			end
+			if command == SearchCommands.UNAVAILABLE and not c then
+				goto continue
+			end
+
+			local usage = preset_usage[k]
+			if isTableValid(usage) then
+				if command == SearchCommands.INACTIVE then goto continue end
 				c = Colors.FIR
 			end
+			if command == SearchCommands.ACTIVE and c ~= Colors.FIR then goto continue end
 
 			ImGui.TableNextRow()
 			ImGui.TableSetColumnIndex(0)
@@ -3532,6 +3632,8 @@ registerForEvent("onOverlayClose", function()
 	overlay_open = false
 	global_options_open = false
 	file_man_open = false
+	file_man_search = SearchCommands.INSTALLED
+	shared_cache.openFileManWindow = nil
 end)
 
 --Display a simple GUI with some options.
