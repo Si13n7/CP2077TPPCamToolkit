@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-06-04, 15:07 UTC+01:00 (MEZ)
+Version: 2025-06-12, 11:59 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -2070,15 +2070,31 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	return true
 end
 
----Loads usage history data from a `history.lua` and replaces `preset_usage`.
-local function loadPresetUsage()
-	local path = ".usage"
+---Loads preset usage statistics from `.usage`, or from `.usage.bak` on failure.
+---@param path string? Optional file path.
+---@param isFallback boolean? Prevents recursive fallback.
+local function loadPresetUsage(path, isFallback)
+	path = isStringValid(path) and path or ".usage"
 	if not fileExists(path) then return end
 	local chunk = loadfile(path)
 	if not chunk then return end
 	local ok, data = pcall(chunk)
 	if ok and isTable(data) then
 		preset_usage = data
+
+		if not isFallback then
+			local src, dst = io.open(path, "r"), io.open(path .. ".bak", "w")
+			if src and dst then
+				local content = src:read("*a")
+				dst:write(content)
+				src:close()
+				dst:close()
+			end
+		end
+		return
+	end
+	if not isFallback then
+		loadPresetUsage(path .. ".bak", true)
 	end
 end
 
@@ -2767,6 +2783,8 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 						clearLastEditorBundle()
 					end
 
+					savePresetUsage()
+
 					logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_DEL_SUCCESS, f)
 				else
 					logF(DevLevels.FULL, LogLevels.WARN, 0xcb3d, Text.LOG_DEL_FAILURE, f, err)
@@ -2842,6 +2860,12 @@ registerForEvent("onInit", function()
 	--CET version check.
 	runtime_min = isRuntimeVersionAtLeast("1.35")
 	runtime_full = isRuntimeVersionAtLeast("1.35.1")
+
+	--Ensures the log file is fresh when the mod initializes.
+	pcall(function()
+		local f = io.open("ThirdPersonVehicleCameraTool.log", "w")
+		if f then f:close() end
+	end)
 
 	--Load all saved data from disk; apply preset only if the player is in a vehicle.
 	onInit()
