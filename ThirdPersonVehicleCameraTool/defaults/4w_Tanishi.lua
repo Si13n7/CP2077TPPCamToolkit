@@ -1,1 +1,1 @@
-return{ID="4w_Tanishi",Close={y=0.5,z=1.85},Medium={y=0.5,z=2.35},Far={y=0.5,z=2.85},IsDefault=true}
+return{ID="4w_Tanishi",Close={a=11,x=0,y=0.5,z=1.85},Medium={a=11,x=0,y=0.5,z=2.35},Far={a=11,x=0,y=0.5,z=2.85},IsDefault=true}

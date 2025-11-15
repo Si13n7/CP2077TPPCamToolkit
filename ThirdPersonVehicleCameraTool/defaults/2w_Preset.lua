@@ -1,1 +1,1 @@
-return{ID="2w_Preset",Close={y=0.45,z=1},Medium={y=0.45,z=1.35},Far={y=0.45,z=1.7},IsDefault=true}
+return{ID="2w_Preset",Close={a=11,x=0,y=0.45,z=1},Medium={a=11,x=0,y=0.45,z=1.35},Far={a=11,x=0,y=0.45,z=1.7},IsDefault=true}

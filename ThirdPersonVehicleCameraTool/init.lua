@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-04, 20:42 UTC+01:00 (MEZ)
+Version: 2025-04-06, 10:45 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -23,9 +23,8 @@ ______________________________________________
 =======================================================]]
 
 
----`ImGui` Definition
----@class ImGui
 ---Provides functions to create graphical user interface elements within the Cyber Engine Tweaks overlay.
+---@class ImGui
 ---@field Begin fun(title: string, flags?: number): boolean # Begins a new ImGui window with optional flags. Must be closed with `ImGui.End()`. Returns `true` if the window is open and should be rendered.
 ---@field End fun(): nil # Ends the creation of the current ImGui window. Must always be called after `ImGui.Begin()`.
 ---@field Dummy fun(width: number, height: number): nil # Creates an invisible element of specified width and height, useful for spacing.
@@ -37,8 +36,9 @@ ______________________________________________
 ---@field Checkbox fun(label: string, value: boolean): (boolean, boolean) # Creates a toggleable checkbox. Returns `changed` (true if state has changed) and `value` (the new state).
 ---@field InputText fun(label: string, value: string, maxLength?: integer): (string, boolean) # Creates a single-line text input field. Returns a tuple: the `new value` and `changed` (true if the text was edited).
 ---@field SliderInt fun(label: string, value: number, min: number, max: number): number # Creates an integer slider. Returns the new `value`.
----@field SliderFloat fun(label: string, value: number, min: number, max: number): number # Creates a float slider that allows users to select a value between a specified minimum and maximum. Returns the updated float value.
+---@field DragFloat fun(label: string, value: number, speed?: number, min?: number, max?: number, format?: string): number # Creates a draggable float input widget. Allows the user to adjust the value by dragging or with arrow keys. Optional speed, min/max limits, and format string. Returns the updated float value.
 ---@field IsItemHovered fun(): boolean # Returns true if the last item is hovered by the mouse cursor.
+---@field IsItemActive fun(): boolean # Returns true while the last item is being actively used (e.g., held with mouse or keyboard input).
 ---@field BeginTooltip fun(): nil # Begins creating a tooltip. Must be paired with `ImGui.EndTooltip()`.
 ---@field EndTooltip fun(): nil # Ends the creation of a tooltip. Must be called after `ImGui.BeginTooltip()`.
 ---@field BeginTable fun(id: string, columns: number, flags?: number): boolean # Begins a table with the specified number of columns. Returns `true` if the table is created successfully and should be rendered.
@@ -47,86 +47,82 @@ ______________________________________________
 ---@field TableNextRow fun(): nil # Advances to the next row of the table. Must be called between rows.
 ---@field TableSetColumnIndex fun(index: number): nil # Moves the focus to a specific column index within the current table row.
 ---@field EndTable fun(): nil # Ends the creation of the current table. Must always be called after `ImGui.BeginTable()`.
----@field GetWindowSize fun(): number # Returns the current width of the window as a floating-point number.
+---@field GetContentRegionAvail fun(): number # Returns the width of the remaining content region inside the current window, excluding padding. Useful for calculating dynamic layouts or centering elements.
 ---@field CalcTextSize fun(text: string): number # Calculates the width of a given text string as it would be displayed using the current font. Returns the width in pixels as a floating-point number.
+---@field GetStyle fun(): ImGuiStyle # Returns the current ImGui style object, which contains values for UI layout, spacing, padding, rounding, and more.
 ImGui = ImGui
 
----`ImGuiWindowFlags` Definition
+---Flags used to configure ImGui window behavior and appearance.
 ---@class ImGuiWindowFlags
 ---@field AlwaysAutoResize number # Automatically resizes the window to fit its content each frame.
 ImGuiWindowFlags = ImGuiWindowFlags
 
----`ImGuiTableFlags` Definition
----@class ImGuiTableFlags
 ---Flags to customize table behavior and appearance.
+---@class ImGuiTableFlags
 ---@field Borders number # Draws borders between cells.
 ImGuiTableFlags = ImGuiTableFlags
 
----`ImGuiTableColumnFlags` Definition
----@class ImGuiTableColumnFlags
 ---Flags to customize individual columns within a table.
+---@class ImGuiTableColumnFlags
 ---@field WidthFixed number # Makes the column have a fixed width.
 ---@field WidthStretch number # Makes the column stretch to fill available space.
 ImGuiTableColumnFlags = ImGuiTableColumnFlags
 
----`TweakDB` Definition
----@class TweakDB
+---Represents the current ImGui style configuration, controlling layout, spacing, padding, rounding, and more.
+---@class ImGuiStyle
+---@field ItemSpacing { x: number, y: number } # Horizontal and vertical spacing between widgets.
+
 ---Provides access to game data stored in the database, including camera offsets and various other game settings.
+---@class TweakDB
 ---@field GetFlat fun(self: TweakDB, key: string): any|nil # Retrieves a value from the database based on the provided key.
 ---@field SetFlat fun(self: TweakDB, key: string, value: any) # Sets or modifies a value in the database for the specified key.
 TweakDB = TweakDB
 
----`Game` Definition
----@class Game
 ---Provides various global game functions, such as getting the player, mounted vehicles, and converting names to strings.
+---@class Game
 ---@field NameToString fun(value: any): string # Converts a game name object to a readable string.
 ---@field GetPlayer fun(): Player|nil # Retrieves the current player instance if available.
 ---@field GetMountedVehicle fun(player: Player): Vehicle|nil # Returns the vehicle the player is currently mounted in, if any.
 Game = Game
 
----`Player` Definition
----@class Player # Represents the player character in the game, providing functions to interact with the player instance.
+---Represents the player character in the game, providing functions to interact with the player instance.
+---@class Player
 ---@field SetWarningMessage fun(self: Player, message: string, duration: number): nil # Displays a warning message on the player's screen for a specified duration.
 Player = Player
 
----`Vehicle` Definition
----@class Vehicle
 ---Represents a vehicle entity within the game, providing functions to interact with it, such as getting the appearance name.
+---@class Vehicle
 ---@field GetCurrentAppearanceName fun(self: Vehicle): string|nil # Retrieves the current appearance name of the vehicle.
 ---@field GetRecordID fun(self: Vehicle): any # Returns the unique TweakDBID associated with the vehicle.
 Vehicle = Vehicle
 
----`Vector3` Definition
----@class Vector3
 ---Represents a three-dimensional vector, commonly used for positions or directions in the game.
+---@class Vector3
 ---@field x number # The X-coordinate.
 ---@field y number # The Y-coordinate.
 ---@field z number # The Z-coordinate.
 ---@field new fun(x: number, y: number, z: number): Vector3 # Creates a new Vector3 instance with specified x, y, and z coordinates.
 Vector3 = Vector3
 
----`Observe` Definition
----@class Observe
 ---Provides functionality to observe game events, allowing custom functions to be executed when certain events occur.
+---@class Observe
 ---@field Observe fun(className: string, functionName: string, callback: fun(...): nil) # Sets up an observer for a specified function within the game.
 Observe = Observe
 
----`registerForEvent` Definition
----@class registerForEvent
 ---Allows the registration of functions to be executed when certain game events occur, such as initialization or shutdown.
+---@class registerForEvent
 ---@field registerForEvent fun(eventName: string, callback: fun(...): nil) # Registers a callback function for a specified event (e.g., 'onInit', 'onIsDefault').
 registerForEvent = registerForEvent
 
----`spdlog` Definition
----@class spdlog
 ---Provides logging functionality, allowing messages to be printed to the console or log files for debugging purposes.
+---@class spdlog
 ---@field info fun(message: string) # Logs an informational message, typically used for general debug output.
 ---@field error fun(message: string) # Logs an error message, usually when something goes wrong.
 spdlog = spdlog
 
----`dir` Definition
----@class dir
 ---Retrieves a list of files and folders from a specified directory.
+---@class dir
+---(IntelliSense needs this extra line, as it is dissatisfied with the name `dir`, which we cannot change.)
 ---@return table # Returns a table containing information about each file and folder within the directory.
 dir = dir
 
@@ -142,7 +138,7 @@ dir = dir
 F = string.format
 
 ---Developer mode levels used to control the verbosity and behavior of debug output.
----@alias DevLevelType 0 | 1 | 2 | 3
+---@alias DevLevelType 0|1|2|3
 ---@class DevLevelEnum
 ---@field Disabled DevLevelType # No debug output.
 ---@field Basic DevLevelType # Print only.
@@ -165,7 +161,7 @@ DevLevel = {
 DevMode = DevLevel.Disabled
 
 ---Log levels used to classify the severity of log messages.
----@alias LogLevelType 0 | 1 | 2
+---@alias LogLevelType 0|1|2
 ---@class LogLevelEnum
 ---@field Info LogLevelType # General informational output.
 ---@field Warn LogLevelType # Non-critical issues or unexpected behavior.
@@ -177,6 +173,103 @@ LogLevel = {
 	Error = 2
 }
 
+---The mod title string constant.
+---@type string
+local TITLE = "Third-Person Vehicle Camera Tool"
+
+---Constant format string for TweakDB path generation.
+---The first '%s' represents the preset ID, the second '%s' represents the camera level (e.g., "High_Close"),
+---and the third '%s' represents the variable (e.g., "lookAtOffset", "defaultRotationPitch").
+---@type string
+local TWEAKDB_PATH_FORMAT = "Camera.VehicleTPP_%s_%s.%s"
+
+---Constant array of possible camera levels used in TweakDB path generation.
+---Each level corresponds to the second '%s' in the `TWEAKDB_PATH_FORMAT` string (e.g., "Low_Medium").
+---@type string[]
+local TWEAKDB_PATH_LEVELS = {
+	"High_Close",
+	"High_Medium",
+	"High_Far",
+	"High_DriverCombatClose",
+	"High_DriverCombatMedium",
+	"High_DriverCombatFar",
+	"Low_Close",
+	"Low_Medium",
+	"Low_Far",
+	"Low_DriverCombatClose",
+	"Low_DriverCombatMedium",
+	"Low_DriverCombatFar"
+}
+
+---Constant array of camera levels.
+---@type string[]
+local CAMERA_LEVELS = { "Close", "Medium", "Far" }
+
+---Constant array of `OffsetData` keys.
+---@type string[]
+local OFFSETDATA_KEYS = { "a", "x", "y", "z" }
+
+---Determines whether the CET overlay is open.
+---@type boolean
+local _isOverlayOpen = false
+
+---Determines whether the mod is enabled.
+---@type boolean
+local _isEnabled = true
+
+---Determines whether overwriting the preset file is allowed.
+---@type boolean
+local _allowOverwrite = false
+
+---Determines whether a vehicle is currently mounted.
+---@type boolean
+local _isVehicleMounted = false
+
+---List of camera preset IDs that were modified at runtime to enable selective restoration.
+---@type string[]
+local _modifiedPresets = {}
+
+---Represents a camera offset configuration with rotation and positional data.
+---@class OffsetData
+---@field a number # The camera's angle in degrees.
+---@field x number # The offset on the X-axis.
+---@field y number # The offset on the Y-axis.
+---@field z number # The offset on the Z-axis.
+
+---Represents a vehicle camera preset or links to another one.
+---@class CameraPreset
+---@field ID string|nil # The camera ID used for the vehicle.
+---@field Close OffsetData|nil # The offset data for close camera view.
+---@field Medium OffsetData|nil # The offset data for medium camera view.
+---@field Far OffsetData|nil # The offset data for far camera view.
+---@field Link string|nil # The name of another vehicle appearance to link to (if applicable).
+---@field IsDefault boolean|nil # Whether to reset to default camera offsets.
+
+---Contains all camera presets and linked vehicles.
+---@type table<string, CameraPreset>
+local _cameraPresets = {}
+
+---Current horizontal padding value used for centering UI elements.
+---Dynamically adjusted based on available window width.
+---@type integer
+local _guiPadding
+
+---When set to true, disables dynamic window padding adjustments and uses the fixed `_guiPadding` value.
+---@type boolean
+local _guiLockPadding
+
+---The currently mounted vehicle camera preset for the editor.
+---@type CameraPreset|nil
+local _guiEditorPreset
+
+---The default preset entry used for comparison in the editor (e.g., when checking if a value has changed).
+---@type CameraPreset|nil
+local _guiEditorPresetDef
+
+---The file name used for saving the current edited preset (including `.lua` extension).
+---@type string|nil
+local _guiEditorPresetName
+
 ---Logs and displays messages based on the current `DevMode` level.
 ---Messages can be written to the log file, printed to the console, or shown as in-game alerts.
 ---@param level LogLevelType # Logging level (0 = Info, 1 = Warning, 2 = Error).
@@ -185,7 +278,7 @@ LogLevel = {
 function Log(level, format, ...)
 	if DevMode == DevLevel.Disabled then return end
 
-	local msg = F"[TPVCamTool]  "
+	local msg = F "[TPVCamTool]  "
 	if level >= LogLevel.Error then
 		msg = msg .. "[Error]  "
 	elseif level == LogLevel.Warn then
@@ -234,83 +327,15 @@ function LogE(mode, level, format, ...)
 	DevMode = previous
 end
 
----The mod title string constant.
----@type string
-local TITLE = "Third-Person Vehicle Camera Tool"
-
----Template string constant for accessing `lookAtOffset` values in `TweakDB`.
----@type string
-local TWEAKDB_PATH_TEMPLATE = "Camera.VehicleTPP_%s_%s.lookAtOffset"
-
----Determines whether the CET overlay is open.
----@type boolean
-local _isOverlayOpen = false
-
----Determines whether the mod is enabled.
----@type boolean
-local _isEnabled = true
-
----Determines whether overwriting the preset file is allowed.
----@type boolean
-local _allowOverwrite = false
-
----Determines whether a vehicle is currently mounted.
----@type boolean
-local _isVehicleMounted = false
-
----List of camera preset IDs that were modified at runtime to enable selective restoration.
----@type string[]
-local _modifiedPresets = {}
-
----Represents a vehicle camera preset or links to another one.
----@class CameraPreset
----@field ID string|nil # The camera ID used for the vehicle.
----@field Close table|nil # The Y-offset for close camera view.
----@field Medium table|nil # The Y-offset for medium camera view.
----@field Far table|nil # The Y-offset for far camera view.
----@field Link string|nil # The name of another vehicle appearance to link to (if applicable).
----@field IsDefault boolean|nil # Whether to reset to default camera offsets.
-
----Contains all camera presets and linked vehicles.
----@type table<string, CameraPreset>
-local _cameraPresets = {}
-
----Paths corresponding to different camera positions.
----@type string[]
-local _cameraPaths = {
-	"High_Close",
-	"High_Medium",
-	"High_Far",
-	"High_DriverCombatClose",
-	"High_DriverCombatMedium",
-	"High_DriverCombatFar",
-	"Low_Close",
-	"Low_Medium",
-	"Low_Far",
-	"Low_DriverCombatClose",
-	"Low_DriverCombatMedium",
-	"Low_DriverCombatFar"
-}
-
----Camera offset levels.
----@type string[]
-local _cameraLevels = {
-	"Close",
-	"Medium",
-	"Far"
-}
-
----The currently mounted vehicle camera preset for the editor.
----@type CameraPreset|nil
-local _editorPreset
-
----The default preset entry used for comparison in the editor (e.g., when checking if a value has changed).
----@type CameraPreset|nil
-local _editorPresetDef
-
----The file name used for saving the current edited preset (including `.lua` extension).
----@type string|nil
-local _editorPresetName
+---Checks if two floating-point numbers are nearly equal within a small epsilon tolerance.
+---@param a number # The first value to compare.
+---@param b number # The second value to compare.
+---@param epsilon number|nil # Optional tolerance. Defaults to 0.0001.
+---@return boolean # True if the values are nearly equal.
+local function floatEquals(a, b, epsilon)
+	epsilon = epsilon or 0.0001
+	return math.abs(a - b) < epsilon
+end
 
 ---Checks whether a given value exists in a sequential table.
 ---@param tbl table # The table to search through (must be a sequential array).
@@ -335,13 +360,43 @@ local function stringStartsWith(str, prefix)
 end
 
 ---Checks if a string ends with a specified suffix.
----@param str string The string to check.
----@param suffix string The suffix to look for.
----@return boolean Returns true if the string ends with the specified suffix, otherwise false.
+---@param str string # The string to check.
+---@param suffix string # The suffix to look for.
+---@return boolean Returns # True if the string ends with the specified suffix, otherwise false.
 local function stringEndsWith(str, suffix)
 	if not str or not suffix then return false end
 	str, suffix = tostring(str), tostring(suffix)
 	return #str >= #suffix and str:sub(- #suffix) == suffix
+end
+
+---Returns the value at the specified index from a variable list of arguments.
+---If the index is beyond the number of available arguments, the last value is returned instead.
+---@param i number # The index of the value to retrieve (1-based).
+---@param ... any # A variable number of values to select from.
+---@return any # The value at index `i`, or the last value if `i` is too large.
+local function pick(i, ...)
+	local args = { ... }
+	return args[i] or args[#args]
+end
+
+---Fetches the default rotation pitch value for a vehicle camera.
+---@param id string # The preset ID of the vehicle.
+---@param path string # The camera path for the vehicle.
+---@return number # The default rotation pitch for the given camera path.
+local function getCameraDefaultRotationPitch(id, path)
+	return TweakDB:GetFlat(F(TWEAKDB_PATH_FORMAT, id, path, "defaultRotationPitch")) or 11
+end
+
+---Sets the default rotation pitch value for a vehicle camera.
+---@param id string # The preset ID of the vehicle.
+---@param path string # The camera path for the vehicle.
+---@param value number # The value to set for the default rotation pitch.
+local function setCameraDefaultRotationPitch(id, path, value)
+	local fallback = getCameraDefaultRotationPitch(id, path)
+	if not fallback or floatEquals(value, fallback) then
+		return
+	end
+	TweakDB:SetFlat(F(TWEAKDB_PATH_FORMAT, id, path, "defaultRotationPitch"), value or fallback)
 end
 
 ---Fetches the current camera offset from 'TweakDB' based on the specified ID and path.
@@ -349,7 +404,7 @@ end
 ---@param path string # The camera path to retrieve the offset for.
 ---@return Vector3|nil # The camera offset as a Vector3.
 local function getCameraLookAtOffset(id, path)
-	return TweakDB:GetFlat(F(TWEAKDB_PATH_TEMPLATE, id, path))
+	return TweakDB:GetFlat(F(TWEAKDB_PATH_FORMAT, id, path, "lookAtOffset"))
 end
 
 ---Sets a camera offset in 'TweakDB' to the specified position values.
@@ -359,19 +414,12 @@ end
 ---@param y number # The Y-coordinate of the camera position.
 ---@param z number # The Z-coordinate of the camera position.
 local function setCameraLookAtOffset(id, path, x, y, z)
-	TweakDB:SetFlat(F(TWEAKDB_PATH_TEMPLATE, id, path), Vector3.new(x, y, z))
-end
-
----Updates the Y (and optionally Z) offset of a camera path in 'TweakDB'.
----@param id string # The camera ID.
----@param path string # The camera path to update.
----@param y number # The new Y-coordinate value.
----@param z number|nil # The optional Z-coordinate value.
-local function setCameraLookAtOffsetYZ(id, path, y, z)
 	local fallback = getCameraLookAtOffset(id, path)
-	if fallback then
-		setCameraLookAtOffset(id, path, fallback.x, y or fallback.y, z or fallback.z)
+	if not fallback or (floatEquals(x, fallback.x) and floatEquals(y, fallback.y) and floatEquals(z, fallback.z)) then
+		return
 	end
+	local value = Vector3.new((x or fallback.x), (y or fallback.y), (z or fallback.z))
+	TweakDB:SetFlat(F(TWEAKDB_PATH_FORMAT, id, path, "lookAtOffset"), value)
 end
 
 ---Extracts the record name from a TweakDBID string representation.
@@ -389,7 +437,7 @@ local function getMountedVehicle()
 	local player = Game.GetPlayer()
 	if not player then
 		_isVehicleMounted = false
-		_editorPreset = nil
+		_guiEditorPreset = nil
 		return nil
 	end
 	local vehicle = Game.GetMountedVehicle(player)
@@ -495,29 +543,25 @@ local function getPreset(id)
 	if not id then return nil end
 
 	local preset = { ID = id }
-	for i, path in ipairs(_cameraPaths) do
+	for i, path in ipairs(TWEAKDB_PATH_LEVELS) do
 		local vec3 = getCameraLookAtOffset(id, path)
-		if not vec3 or not vec3.y then return nil end
+		if not vec3 or (not vec3.x and not vec3.y and not vec3.z) then return nil end
 
-		local p = (i - 1) % 3
-		local v = { y = vec3.y, z = vec3.z }
-		if p == 0 then
-			preset.Close = v
-		elseif p == 1 then
-			preset.Medium = v
-		else
-			preset.Far = v
-		end
+		local level = CAMERA_LEVELS[(i - 1) % 3 + 1]
+		local angle = getCameraDefaultRotationPitch(id, path)
+
+		---@cast preset table<string, OffsetData>
+		preset[level] = { a = angle, x = vec3.x, y = vec3.y, z = vec3.z }
 
 		if preset.Far and preset.Medium and preset.Close then
 			if DevMode >= DevLevel.Full then
-				Log(LogLevel.Info, "Found camera offset for '%s'.", id)
+				Log(LogLevel.Info, "Camera offset '%s' is complete.", id)
 			end
 			return preset
 		end
 	end
 
-	Log(LogLevel.Warn, "Could not retrieve camera offset for '%s'.", id)
+	Log(LogLevel.Error, "Could not retrieve camera offset: '%s'.", id)
 	return nil
 end
 
@@ -546,22 +590,26 @@ end
 ---Returns the Y and Z offset values from a preset or its fallback.
 ---@param preset CameraPreset|nil # The main preset table containing `Close`, `Medium`, or `Far` levels.
 ---@param fallback CameraPreset|nil # The fallback preset table used if values are missing in the main preset.
----@param level string # The level to fetch ("Close", "Medium", or "Far").
+---@param level "Close"|"Medium"|"Far" # The level to fetch ("Close", "Medium", or "Far").
+---@return number a # The angle value. Falls back to 11 if not found.
+---@return number x # The X offset value. Falls back to 0 if not found.
 ---@return number y # The Y offset value. Falls back to 0 if not found.
----@return number z # The Z offset value. Falls back to 1.115 if not found.
-local function getYZ(preset, fallback, level)
-	if type(preset) ~= "table" then
-		Log(LogLevel.Error, "No preset found in 'getYZ()' for level '%s'.", level)
-		return 0, 0
+---@return number z # The Z offset value. Falls back to a default per level (Close = 1.115, Medium = 1.65, Far = 2.25).
+local function getValidOffsetData(preset, fallback, level)
+	if type(preset) ~= "table" or not tableContainsValue(CAMERA_LEVELS, level) then
+		Log(LogLevel.Error, "No preset provided for level '%s'.", level)
+		return 0, 0, 0, 0 --Should never be returned with the current code.
 	end
 
 	local p = preset[level]
-	local f = fallback and fallback[level]
+	local f = (fallback and fallback[level]) or {}
 
-	local y = (p and p.y) or (f and f.y) or 0
-	local z = (p and p.z) or (f and f.z) or (level == "Far" and 2.25 or level == "Medium" and 1.65 or 1.115)
+	local a = (p and p.a) or f.a or 11
+	local x = (p and p.x) or f.x or 0
+	local y = (p and p.y) or f.y or 0
+	local z = (p and p.z) or f.z or ({ Close = 1.115, Medium = 1.65, Far = 2.25 })[level]
 
-	return y, z
+	return a, x, y, z
 end
 
 ---Applies a camera offset preset to the vehicle by updating values in TweakDB.
@@ -573,7 +621,7 @@ end
 ---@param preset CameraPreset|nil # The preset to apply. May be `nil` to auto-resolve via the current vehicle.
 ---@param count number|nil # Internal recursion counter to prevent infinite loops via `Link`. Do not set manually.
 local function applyPreset(preset, count)
-	if not preset then
+	if not preset and not count then
 		local vehicle = getMountedVehicle()
 		if not vehicle then return end
 
@@ -592,7 +640,7 @@ local function applyPreset(preset, count)
 		local key = getPresetKey(name)
 		if not key then return end
 
-		applyPreset(_cameraPresets[key])
+		applyPreset(_cameraPresets[key], 0)
 		return
 	end
 
@@ -614,12 +662,12 @@ local function applyPreset(preset, count)
 	end
 
 	local fallback = getDefaultPreset(preset) or {}
-	for i, path in ipairs(_cameraPaths) do
-		local n = (i - 1) % 3
-		local m = n == 0 and "Close" or n == 1 and "Medium" or "Far"
-		local y, z = getYZ(preset, fallback, m)
+	for i, path in ipairs(TWEAKDB_PATH_LEVELS) do
+		local level = CAMERA_LEVELS[(i - 1) % 3 + 1]
+		local a, x, y, z = getValidOffsetData(preset, fallback, level)
 
-		setCameraLookAtOffsetYZ(preset.ID, path, y, z)
+		setCameraLookAtOffset(preset.ID, path, x, y, z)
+		setCameraDefaultRotationPitch(preset.ID, path, a)
 	end
 
 	table.insert(_modifiedPresets, preset.ID)
@@ -627,13 +675,12 @@ end
 
 ---Restores all camera offset presets to their default values.
 local function restoreAllPresets()
-	_modifiedPresets = {}
-
 	for _, preset in pairs(_cameraPresets) do
 		if preset.IsDefault then
 			applyPreset(preset)
 		end
 	end
+	_modifiedPresets = {}
 
 	Log(LogLevel.Info, "Restored all default presets.")
 end
@@ -668,13 +715,17 @@ local function isPresetValid(preset)
 	if type(preset) ~= "table" then return false end
 
 	if type(preset.ID) == "string" then
-		for _, k in ipairs(_cameraLevels) do
-			local offset = preset[k]
-			if type(offset) == "table" then
-				if type(offset.y) == "number" or type(offset.z) == "number" then
+		for _, e in ipairs(CAMERA_LEVELS) do
+			local offset = preset[e]
+			if type(offset) ~= "table" then
+				goto continue
+			end
+			for _, k in ipairs(OFFSETDATA_KEYS) do
+				if type(offset[k]) == "number" then
 					return true
 				end
 			end
+			::continue::
 		end
 	end
 
@@ -765,7 +816,7 @@ local function savePreset(name, preset, allowOverwrite, saveComplete)
 		if saveComplete then return true end
 		if type(a) ~= type(b) then return true end
 		if type(a) == "number" then
-			return math.abs(a - b) > 0.0001
+			return floatEquals(a, b)
 		end
 		return a ~= b
 	end
@@ -774,24 +825,22 @@ local function savePreset(name, preset, allowOverwrite, saveComplete)
 		return F("%.3f", v):gsub("0+$", ""):gsub("%.$", "")
 	end
 
-	local norm = getDefaultPreset(preset) or {}
+	local default = getDefaultPreset(preset) or {}
 	local save = false
 	local parts = { "return{" }
 	table.insert(parts, F('ID=%q,', preset.ID))
-	for _, mode in ipairs(_cameraLevels) do
-		local a = preset[mode]
-		local b = norm[mode]
+	for _, mode in ipairs(CAMERA_LEVELS) do
+		local p = preset[mode]
+		local d = default[mode]
 		local sub = {}
 
-		if type(a) == "table" then
-			if not b then b = {} end
-			if isDifferent(a.y, b.y) then
-				save = true
-				table.insert(sub, "y=" .. round(a.y))
-			end
-			if isDifferent(a.z, b.z) then
-				save = true
-				table.insert(sub, "z=" .. round(a.z))
+		if type(p) == "table" then
+			d = type(d) == "table" and d or {}
+			for _, k in ipairs(OFFSETDATA_KEYS) do
+				if isDifferent(p[k], d[k]) then
+					save = true
+					table.insert(sub, k .. "=" .. round(p[k]))
+				end
 			end
 		end
 
@@ -801,7 +850,7 @@ local function savePreset(name, preset, allowOverwrite, saveComplete)
 	end
 
 	if not save then
-		Log(LogLevel.Warn, "No changes were made to preset '%s' compared to the default preset '%s'.", name, norm.ID)
+		Log(LogLevel.Warn, "No changes were made to preset '%s' compared to the default preset '%s'.", name, default.ID)
 		return false
 	end
 
@@ -820,6 +869,18 @@ local function savePreset(name, preset, allowOverwrite, saveComplete)
 	file:close()
 
 	return true
+end
+
+---Retrieves the available content width and calculates dynamic padding for UI alignment.
+---If padding changes are locked, returns the last used padding.
+---@return number width # The available content width inside the current window.
+---@return number padding # The calculated horizontal padding for centering elements.
+local function guiGetMetrics()
+	local width = ImGui.GetContentRegionAvail()
+	if _guiLockPadding then return width, _guiPadding end
+	local style = ImGui.GetStyle()
+	_guiPadding = math.max(10, math.floor((width - 230) * 0.54 + 18) - style.ItemSpacing.x)
+	return width, _guiPadding
 end
 
 ---Displays a tooltip when the current UI item is hovered.
@@ -846,7 +907,7 @@ registerForEvent("onInit", function()
 	--This event can fire even if the player is already mounted, so we guard with `_isVehicleMounted`.
 	Observe("VehicleComponent", "OnMountingEvent", function()
 		if not _isEnabled or _isVehicleMounted then return end
-		_editorPreset = nil
+		_guiEditorPreset = nil
 		applyPreset()
 	end)
 
@@ -854,7 +915,7 @@ registerForEvent("onInit", function()
 	Observe("VehicleComponent", "OnUnmountingEvent", function()
 		if not _isEnabled then return end
 		_isVehicleMounted = false
-		_editorPreset = nil
+		_guiEditorPreset = nil
 		restoreModifiedPresets()
 	end)
 
@@ -880,17 +941,20 @@ end)
 registerForEvent("onDraw", function()
 	if not _isOverlayOpen or not ImGui.Begin(TITLE, ImGuiWindowFlags.AlwaysAutoResize) then return end
 
-	--Minimum window width and height padding.
+	--Minimum window width and height.
 	ImGui.Dummy(230, 4)
 
+	--Retrieves the available content width and the dynamically calculated control padding for UI element alignment.
+	local contentWidth, controlPadding = guiGetMetrics()
+
 	--Checkbox to toggle mod functionality and handle enable/disable logic.
-	ImGui.Dummy(10, 0)
+	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
-	local isEnabled = ImGui.Checkbox("  Toggle Mod Functionality", _isEnabled)
+	local isEnabled = ImGui.Checkbox("Toggle Mod Functionality", _isEnabled)
 	guiTooltip("Enables or disables the mod functionality.")
 	if isEnabled ~= _isEnabled then
 		_isEnabled = isEnabled
-		_editorPreset = nil
+		_guiEditorPreset = nil
 		if isEnabled then
 			loadPresets()
 			applyPreset()
@@ -908,26 +972,27 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(0, 2)
 
 	--The button that reloads all presets.
-	ImGui.Dummy(10, 0)
+	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
 	if ImGui.Button("Reload All Presets", 192, 24) then
-		_editorPreset = nil
+		_guiEditorPreset = nil
 		loadPresets(true)
 		restoreAllPresets()
 		applyPreset()
 		LogE(DevLevel.Alert, LogLevel.Info, "Presets have been reloaded!")
 	end
 	guiTooltip(
-		"Reloads all data from custom preset files - only\nneeded if files have been changed or added.",
+		"Reloads all data from custom preset files - only\nneeded if files have been changed or added, or\nif you want to reset the last unsaved changes.",
 		"\nPlease note that you need to exit and re-enter\nthe vehicle for the changes to take effect."
 	)
 	ImGui.Dummy(0, 2)
 
 	--Slider to set the developer mode level.
-	ImGui.Dummy(10, 0)
+	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
 	ImGui.PushItemWidth(77)
-	DevMode = ImGui.SliderInt("  Developer Mode", DevMode, DevLevel.Disabled, DevLevel.Full)
+	DevMode = ImGui.SliderInt("Developer Mode", DevMode, DevLevel.Disabled, DevLevel.Full)
+	_guiLockPadding = ImGui.IsItemActive()
 	guiTooltip(
 		"Enables a feature that allows you to create, test, and save your own presets.",
 		"\nAlso adjusts the level of debug output:",
@@ -947,7 +1012,7 @@ registerForEvent("onDraw", function()
 		end,
 		function()
 			vehicle = getMountedVehicle()
-			return vehicle
+			return vehicle;
 		end,
 		function()
 			name = getVehicleName(vehicle)
@@ -972,9 +1037,9 @@ registerForEvent("onDraw", function()
 		ImGui.TableHeadersRow()
 
 		presetKey = getPresetKey(name)
-		if not _editorPreset then
-			_editorPresetDef = nil
-			_editorPresetName = nil
+		if not _guiEditorPreset then
+			_guiEditorPresetDef = nil
+			_guiEditorPresetName = nil
 		end
 
 		local dict = {
@@ -991,17 +1056,17 @@ registerForEvent("onDraw", function()
 			local text = item.value or "None"
 			ImGui.TableSetColumnIndex(1)
 			if item.key == "Preset" then
-				local value = _editorPresetName or text
+				local value = _guiEditorPresetName or text
 
-				local width = ImGui.CalcTextSize(value)
-				ImGui.PushItemWidth(width + 10)
+				local width = ImGui.CalcTextSize(value) + 8
+				ImGui.PushItemWidth(width)
 
 				local newText, changed = ImGui.InputText("##Preset", value, 96)
 				if changed and newText then
 					if not stringEndsWith(newText, ".lua") then
 						newText = newText .. ".lua"
 					end
-					_editorPresetName = newText
+					_guiEditorPresetName = newText
 				end
 
 				ImGui.PopItemWidth()
@@ -1013,8 +1078,8 @@ registerForEvent("onDraw", function()
 		ImGui.EndTable()
 	end
 
-	--Camera preset editor allowing Y/Z position adjustments — if certain conditions are met.
-	local preset = _editorPreset or getPreset(id)
+	--Camera preset editor allowing adjustments to Angle, X, Y, and Z coordinates — if certain conditions are met.
+	local preset = _guiEditorPreset or getPreset(id)
 	if not preset then
 		Log(LogLevel.Warn, "No preset found.")
 
@@ -1022,11 +1087,11 @@ registerForEvent("onDraw", function()
 		ImGui.End()
 		return
 	end
-	if not _editorPreset then
-		_editorPreset = preset
+	if not _guiEditorPreset then
+		_guiEditorPreset = preset
 	end
 
-	local original = _editorPresetDef or getDefaultPreset(preset)
+	local original = _guiEditorPresetDef or getDefaultPreset(preset)
 	if not original then
 		Log(LogLevel.Error, "Original preset '%s' for '%s' not found.", id, name)
 
@@ -1034,36 +1099,43 @@ registerForEvent("onDraw", function()
 		ImGui.End()
 		return
 	end
-	if not _editorPresetDef then
-		_editorPresetDef = original
+	if not _guiEditorPresetDef then
+		_guiEditorPresetDef = original
 	end
 
-	if ImGui.BeginTable("CameraOffsetEditor", 3, ImGuiTableFlags.Borders) then
-		ImGui.TableSetupColumn("Level", ImGuiTableColumnFlags.WidthFixed, -1)
-		ImGui.TableSetupColumn("Y Offset", ImGuiTableColumnFlags.WidthStretch)
-		ImGui.TableSetupColumn("Z Offset", ImGuiTableColumnFlags.WidthStretch)
+	if ImGui.BeginTable("CameraOffsetEditor", 5, ImGuiTableFlags.Borders) then
+		local labels = { "Level", "Angle", "X Offset", "Y Offset", "Z Offset" }
+		for i, label in ipairs(labels) do
+			local flag = i < 3 and ImGuiTableColumnFlags.WidthFixed or ImGuiTableColumnFlags.WidthStretch
+			ImGui.TableSetupColumn(label, flag, -1)
+		end
 		ImGui.TableHeadersRow()
 
-		for _, key in ipairs(_cameraLevels) do
-			local offsets = preset[key]
-			if type(offsets) == "table" then
-				ImGui.TableNextRow()
+		for _, level in ipairs(CAMERA_LEVELS) do
+			local data = preset[level]
+			if type(data) ~= "table" then goto continue end
 
-				ImGui.TableSetColumnIndex(0)
-				ImGui.Text(key)
+			ImGui.TableNextRow()
+			ImGui.TableSetColumnIndex(0)
+			ImGui.Text(level)
 
-				for i, axis in ipairs({ "y", "z" }) do
-					ImGui.TableSetColumnIndex(i)
-					ImGui.PushItemWidth(-1)
-					local curVal = offsets[axis] or original[id][key][axis] or 0.0
-					local minVal = i == 1 and -10 or 0
-					local maxVal = i == 1 and 10 or 32
-					local newVal = ImGui.SliderFloat(F("##%s_%s", key, axis), curVal, minVal, maxVal)
-					ImGui.PopItemWidth()
+			for i, field in ipairs(OFFSETDATA_KEYS) do
+				local value = data[field] or original[id][level][field] or 0.0
+				local speed = pick(i, 1, 0.005)
+				local min = pick(i, -45, -5, -10, 0)
+				local max = pick(i, 90, 5, 10, 32)
+				local format = pick(i, "%.0f", "%.3f")
 
-					offsets[axis] = newVal
-				end
+				ImGui.TableSetColumnIndex(i)
+				ImGui.PushItemWidth(-1)
+
+				value = ImGui.DragFloat(F("##%s_%s", level, field), value, speed, min, max, format)
+				data[field] = math.min(math.max(value, min), max)
+
+				ImGui.PopItemWidth()
 			end
+
+			::continue::
 		end
 
 		ImGui.EndTable()
@@ -1071,14 +1143,12 @@ registerForEvent("onDraw", function()
 	end
 
 	--The validated preset key, required for the apply and save buttons.
-	local validKey
+	local validKey = getValidPresetKey(name, presetKey or name, _guiEditorPresetName)
 
 	--Button to apply previously configured values in-game.
-	local width = ImGui.GetWindowSize() - 16
-	if ImGui.Button("Apply Changes", width, 24) then
-		validKey = getValidPresetKey(name, presetKey or name, _editorPresetName)
+	if ImGui.Button("Apply Changes", contentWidth, 24) then
 		_cameraPresets[validKey] = preset
-		_editorPresetName = validKey
+		_guiEditorPresetName = validKey
 		LogE(DevLevel.Alert, LogLevel.Info, "The preset '%s' has been updated.", validKey)
 	end
 	guiTooltip(
@@ -1088,8 +1158,7 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(0, 1)
 
 	--Button to save configured values to a file for future automatic use.
-	if ImGui.Button("Save Changes to File", width, 24) then
-		validKey = getValidPresetKey(name, presetKey or name, _editorPresetName)
+	if ImGui.Button("Save Changes to File", contentWidth, 24) then
 		if savePreset(validKey, preset, _allowOverwrite) then
 			_allowOverwrite = false
 			_cameraPresets[validKey] = preset
@@ -1100,15 +1169,14 @@ registerForEvent("onDraw", function()
 	end
 	guiTooltip(
 		F("Saves the modified preset permanently under './presets/%s.lua'.", validKey),
-		"\nPlease note that overwriting existing presets is not allowed\nto prevent accidental loss.",
-		"\nIf you want to overwrite a preset, you must delete the existing\nfile manually first."
+		"\nPlease note that overwriting existing presets is not allowed\nby default to prevent accidental loss of data."
 	)
 	ImGui.Dummy(0, 2)
 
 	--Checkbox to toggle allowing file overwrites.
-	ImGui.Dummy(10, 0)
+	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
-	_allowOverwrite = ImGui.Checkbox("  Allow Overwriting of Files", _allowOverwrite)
+	_allowOverwrite = ImGui.Checkbox("Allow Overwriting of Files", _allowOverwrite)
 	guiTooltip("Enables or disables the ability to overwrite existing preset files.")
 	ImGui.Dummy(0, 2)
 

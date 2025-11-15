@@ -1,1 +1,1 @@
-return{ID="4w_Quadra66_Nomad",Close={y=0,z=1.2},Medium={y=0,z=1.5},Far={y=0,z=2.5},IsDefault=true}
+return{ID="4w_Quadra66_Nomad",Close={a=11,x=0,y=0,z=1.2},Medium={a=11,x=0,y=0,z=1.5},Far={a=11,x=0,y=0,z=2.5},IsDefault=true}

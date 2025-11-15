@@ -1,1 +1,1 @@
-return{ID="v_utility4_kaukaz_bratsk_Preset",Close={y=4,z=2.75},Medium={y=4,z=3.35},Far={y=4,z=4},IsDefault=true}
+return{ID="v_utility4_kaukaz_bratsk_Preset",Close={a=11,x=0,y=4,z=2.75},Medium={a=11,x=0,y=4,z=3.35},Far={a=11,x=0,y=4,z=4},IsDefault=true}

@@ -1,1 +1,1 @@
-return{ID="4w_Mahir_Supron_Kurtz",Close={y=0.5,z=2},Medium={y=0.5,z=2.5},Far={y=0.5,z=3},IsDefault=true}
+return{ID="4w_Mahir_Supron_Kurtz",Close={a=11,x=0,y=0.5,z=2},Medium={a=11,x=0,y=0.5,z=2.5},Far={a=11,x=0,y=0.5,z=3},IsDefault=true}
