@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-09-16, 19:16 UTC+01:00 (MEZ)
+Version: 2025-09-18, 16:29 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -51,6 +51,7 @@ ______________________________________________
 ---@field EndTable fun() # Ends the creation of the current table. Must always be called after `ImGui.BeginTable()`.
 ---@field GetColumnWidth fun(columnIndex?: integer): number # Returns the current width in pixels of the specified column index (default: 0). Only valid when called within an active table.
 ---@field GetContentRegionAvail fun(): number # Returns the width of the remaining content region inside the current window, excluding padding. Useful for calculating dynamic layouts or centering elements.
+---@field GetScrollMaxY fun(): number # Returns the maximum vertical scroll offset of the current window. If greater than 0, a vertical scrollbar is visible. Useful to determine scroll range and scrollbar visibility.
 ---@field CalcTextSize fun(text: string): number # Calculates the width of a given text string as it would be displayed using the current font. Returns the width in pixels as a floating-point number.
 ---@field GetStyle fun(): ImGuiStyle # Returns the current ImGui style object, which contains values for UI layout, spacing, padding, rounding, and more.
 ---@field GetWindowPos fun(): number, number # Returns the X and Y position of the current window, relative to the screen.
@@ -152,26 +153,27 @@ TDBID = TDBID
 ---Provides various global game functions, such as getting the player, mounted vehicles, and converting names to strings.
 ---@class Game
 ---@field NameToString fun(value: any): string # Converts a game name object to a readable string.
+---@field GetSystemRequestsHandler fun(): SystemRequestsHandler # Provides access to system requests, e.g., game version.
 ---@field GetPlayer fun(): Player? # Retrieves the current player instance if available.
----@field GetVehicleSystem fun(): VehicleSystem # Retrieves the singleton instance of the VehicleSystem.
 ---@field GetMountedVehicle fun(player: Player): Vehicle? # Returns the vehicle the player is currently mounted in, if any.
 Game = Game
+
+---Provides access to system-level requests and information.
+---@class SystemRequestsHandler
+---@field GetGameVersion fun(): string # Returns the current game version string.
+SystemRequestsHandler = SystemRequestsHandler
 
 ---Represents the player character in the game, providing functions to interact with the player instance.
 ---@class Player
 ---@field SetWarningMessage fun(self: Player, message: string, duration: number) # Displays a warning message on the player's screen for a specified duration.
 Player = Player
 
----Provides access to vehicle-related systems, including retrieval of player-owned vehicles.
----@class VehicleSystem
----@field GetPlayerVehicles fun(self: VehicleSystem): Vehicle[] # Returns an array of all vehicles currently owned/unlocked by the player.
-VehicleSystem = VehicleSystem
-
 ---Represents a vehicle entity within the game, providing functions to interact with it, such as getting the appearance name.
 ---@class Vehicle
----@field GetCurrentAppearanceName fun(self: Vehicle): string? # Retrieves the current appearance name of the vehicle.
 ---@field GetRecordID fun(self: Vehicle): any # Returns the unique TweakDBID associated with the vehicle.
 ---@field GetTDBID fun(self: Vehicle): TDBID? # Retrieves the internal TweakDB identifier used to reference this vehicle in the game database. Returns `nil` if unavailable.
+---@field GetCurrentAppearanceName fun(self: Vehicle): string? # Retrieves the current appearance name of the vehicle.
+---@field GetDisplayName fun(self: Vehicle): string? # Retrieves the human-readable display name of the vehicle.
 Vehicle = Vehicle
 
 ---Represents a three-dimensional vector, commonly used for positions or directions in the game.

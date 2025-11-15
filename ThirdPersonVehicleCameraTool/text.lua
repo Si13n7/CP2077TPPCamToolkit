@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-09-16, 19:16 UTC+01:00 (MEZ)
+Version: 2025-09-18, 16:29 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -26,7 +26,7 @@ return {
 
 	--GUI: 🚀 Main Controls and Tooltips
 	GUI_TITL = "Third-Person Vehicle Camera Tool",
-	GUI_OLD_CET = "\u{f0026} This mod requires CET version 1.35 or higher. You are using an outdated version (%s), which may cause issues. Any use is at your own risk. Please do not report any problems unless you meet the minimum requirements.",
+	GUI_OLD_VER = "\u{f0026} This mod requires game version 2.21 or higher and CET version 1.35 or higher. You are using at least one outdated version (game: %s; CET: %s), which may cause issues. Any use is at your own risk. Please do not report any problems unless you meet the minimum requirements.",
 	GUI_TGL_MOD = "Toggle Mod Functionality",
 	GUI_TGL_MOD_TIP = "Enables or disables the mod functionality.",
 	GUI_RLD_ALL = "\u{f054d} Reload All Presets ",
@@ -46,6 +46,8 @@ return {
 	GUI_OPEN_FMAN = "\u{f12e3} Preset File Manager ",
 
 	--GUI: 📋 Table Label Tooltips
+	GUI_TBL_LABL_DNAME_TIP = "The vehicle's display name.",
+	GUI_TBL_LABL_STATUS_TIP = "The vehicle's player status.",
 	GUI_TBL_LABL_VEH_TIP = "The vehicle's name.",
 	GUI_TBL_LABL_APP_TIP = "The vehicle's appearance name.",
 	GUI_TBL_LABL_CAMID_TIP = "The vehicle's camera identifier.",
@@ -55,9 +57,12 @@ return {
 	GUI_TBL_LABL_MID_TIP = "Camera Distance: Medium",
 	GUI_TBL_LABL_FAR_TIP = "Camera Distance: Far",
 
-	--GUI: 📌 Table Value Tooltips
+	--GUI: 💶 Table Values and Tooltips
+	GUI_TBL_VAL_STATUS_0 = "Vanilla Crowd Vehicle",
+	GUI_TBL_VAL_STATUS_1 = "Vanilla Player Vehicle",
+	GUI_TBL_VAL_STATUS_2 = "Custom Player Vehicle",
 	GUI_TBL_VAL_CCAMID_TIP = "\u{f1980} Camera Access Map| |Distance Level:|Database Access Path:",
-	GUI_TBL_VAL_PSET_TIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of Vehicle or Appearance, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} Vehicle: (e.g. \"%s\")\n\u{f0b3b}\u{f07ac} Appearance: (e.g. \"%s\")\n\u{f0b3c}\u{f010b} Prefix of Vehicle: (e.g. \"%s\")\n\u{f0b3d}\u{f07ac} Prefix of Appearance: (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority, otherwise, you will need to delete the one that will steal its priority. Take a look at the Preset File Manager to delete presets.",
+	GUI_TBL_VAL_PSET_TIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of \u{f010b} or \u{f07ac}, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} (e.g. \"%s\")\n\u{f0b3b}\u{f07ac} (e.g. \"%s\")\n\u{f0b3c}Prefix of \u{f010b} (e.g. \"%s\")\n\u{f0b3d}Prefix of \u{f07ac} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Manager to delete presets, if necessary.",
 	GUI_TBL_VAL_ANG_TIP = "\u{f10f3} Angles (°)| |Default:|%d|Min:|%d|Max:|%d|In Use:|%d",
 	GUI_TBL_VAL_DIST_TIP = "\u{f054e} Distance| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Closer|Increase:|Farther",
 	GUI_TBL_VAL_X_TIP = "\u{f0d4c} X-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Left|Increase:|Right",
@@ -76,7 +81,7 @@ return {
 	GUI_FMAN_DEL_CONFIRM = "Delete file \"%s\"?",
 	GUI_FMAN_NO_PSETS = "No presets have been created yet.",
 	GUI_FMAN_NAME_TIP = "\u{f08b1} %s",
-	GUI_FMAN_SEARCH_TIP = "\u{f0232} Filter Commands| |%s|Shows files of vehicles available in the game|%s|Shows files of vehicles not available in the game|%s|Shows files of vehicles that exist but have never been used|%s|Shows files of vehicles that have been actively used",
+	GUI_FMAN_SEARCH_TIP = "\u{f0232} Filter Commands| |%s|Shows files of vehicles available in the game|%s|Shows files of vehicles not available in the game|%s|Shows files of vehicles that have been actively used|%s|Shows files of vehicles that exist but have never been used",
 	GUI_FMAN_USAGE_TIP = "\u{f0520} Usage History| |First Used:|%s|Last Used:|%s|Total Uses:|%d",
 
 	--LOG: ℹ️ Info
@@ -128,7 +133,6 @@ return {
 	LOG_DIR_NOT_EXIST = "You cannot delete the entire directory under '%s'.",
 	LOG_FAIL_APPLY = "Could not apply preset: incomplete parameters ('%s').",
 	LOG_FAIL_LOAD = "Failed to load preset '%s/%s': '%s'.",
-	LOG_INV_RECID = "Vehicle record ID is inavlid: '%s'.",
 	LOG_MOVE_FAILURE = "Failed to rename preset '%s' to '%s'. %s",
 	LOG_NO_APP = "The vehicle's appearance could not be found.",
 	LOG_NO_CAM_OSET = "Could not retrieve camera offset: '%s'.",

@@ -1,1 +1,0 @@
-return{ID="4w_Thorton_Colby",Close={y=-0.1,d=-0.4},Medium={y=-0.1,d=1},Far={y=-0.1,d=4.2},IsVanilla=true}
