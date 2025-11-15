@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-09-27, 23:07 UTC+01:00 (MEZ)
+Version: 2025-09-28, 19:40 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -3395,7 +3395,7 @@ end
 
 ---Displays a single line of text with optional horizontal centering, vertical spacing, and custom color.
 ---@param text string # The text to display.
----@param color? number #  Optional 32-bit ABGR color (e.g. 0xffc0c0c0). If provided, temporarily overrides the current text color.
+---@param color? number # Optional 32-bit ABGR color (e.g. 0xffc0c0c0). If provided, temporarily overrides the current text color.
 ---@param heightPadding? number # Optional vertical space (in pixels) added below the text. Defaults to 0 if omitted.
 ---@param contentWidth? number # Optional content width, used to center the text horizontally.
 ---@param itemSpacing? number # Optional horizontal spacing between UI elements. Used with centering logic.
@@ -3430,12 +3430,7 @@ end
 ---@param text string # The text to display.
 ---@param wrap number # The maximum width before wrapping.
 local function addTextCenterWrap(text, wrap)
-	if not isStringValid(text) then return end
-
-	if not isNumber(wrap) or wrap < 40 then
-		ImGui.Text(text)
-		return
-	end
+	if not isStringValid(text) or not isNumber(wrap) or wrap < 10 then return end
 
 	local ln, w = "", ImGui.GetWindowSize()
 	for s in text:gmatch("%S+") do
@@ -4049,11 +4044,11 @@ registerForEvent("onInit", function()
 	local backupDevMode
 
 	--Game version check.
-	state.isGameMinVersion     = isVersionAtLeast(getGameVersion(), "2.21")
+	state.isGameMinVersion = isVersionAtLeast(getGameVersion(), "2.21")
 
 	--CET version check.
-	local runVer               = getRuntimeVersion()
-	state.isRuntimeMinVersion  = isVersionAtLeast(runVer, "1.35")
+	local runVer = getRuntimeVersion()
+	state.isRuntimeMinVersion = isVersionAtLeast(runVer, "1.35")
 	state.isRuntimeFullVersion = isVersionAtLeast(runVer, "1.35.1")
 
 	--Ensures the log file is fresh when the mod initializes.
