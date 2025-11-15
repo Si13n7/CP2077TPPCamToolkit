@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-05-11, 20:57 UTC+01:00 (MEZ)
+Version: 2025-05-12, 11:00 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -81,7 +81,7 @@ ______________________________________________
 ---@field Preset ICameraPreset # The actual preset data (angles and offsets).
 ---@field Key string # Internal identifier for lookups and invalid name detection.
 ---@field Name string # User-modifiable display name of the preset.
----@field Token number # Adler‑32 checksum of `Preset`, used to detect changes.
+---@field Token number # Adler-32 checksum of `Preset`, used to detect changes.
 ---@field IsPresent boolean # True if a corresponding preset file exists on disk.
 
 ---Represents pending actions for a modified camera preset within the editor workflow.
@@ -221,7 +221,7 @@ local call_id_counter = 0
 
 ---Indicates whether at least one recurring timer is active.
 ---Used to skip unnecessary processing in `onUpdate` event when no timers exist.
-local call_is_active
+local call_is_active = false
 
 ---Persistent cache for storing reusable or computed values across sessions.
 ---Unlike `vehicle_cache`, it retains data throughout the CET runtime.
@@ -347,7 +347,7 @@ local function isTable(t)
 	return isType("table", t)
 end
 
----Checks whether the provided argument is non-empty tables.
+---Checks whether the provided argument is a non-empty table.
 ---Returns false if any argument is not a table or is an empty table.
 ---@param t any # Value to check.
 ---@return boolean # True if the argument is a non-empty table, false otherwise.
@@ -379,6 +379,17 @@ end
 ---@return boolean # Returns true only if the argument is Vector3.
 local function isVector3(v)
 	return isMetaType("sol.Vector3", v)
+end
+
+---Checks whether a value is nil or considered empty (string or table).
+---@param v any # The value to check.
+---@return boolean # True if the value is nil, an empty string, or an empty table.
+local function nilOrEmpty(v)
+	if v == nil then return true end
+	local t = type(v)
+	if t == "string" then return #v == 0 end
+	if t == "table" then return next(v) == nil end
+	return false
 end
 
 ---Checks whether all provided arguments are of the specified type.
@@ -453,9 +464,9 @@ local function areVector3(...)
 end
 
 ---Determines whether a table is a pure sequence (array) with contiguous integer keys 1..#t.
----Returns false if any key is non‑numeric or if there are gaps in the numeric index.
----@param t table? # The table to test (nil or non‑table will be treated as not an array).
----@return boolean # True if `t` is an array of length `#t` with no non‑numeric keys.
+---Returns false if any key is non-numeric or if there are gaps in the numeric index.
+---@param t table? # The table to test (nil or non-table will be treated as not an array).
+---@return boolean # True if `t` is an array of length `#t` with no non-numeric keys.
 local function isArray(t)
 	if not isTable(t) then return false end
 	---@cast t table
@@ -574,20 +585,32 @@ local function contains(x, v)
 	return false
 end
 
----Checks if a string starts with a given prefix.
+---Checks if a string starts or ends with a given affix.
 ---@param s string # The string to check.
----@param v string # The prefix to match.
----@param caseInsensitive boolean? # True if string comparisons ignore letter case.
----@return boolean # True if `s` starts with `v`, false otherwise.
-local function startsWith(s, v, caseInsensitive)
+---@param v string # The prefix or suffix to match.
+---@param atEnd boolean # If true, checks suffix (ends with); if false, checks prefix (starts with).
+---@param caseInsensitive boolean? # If true, ignores case when comparing.
+---@return boolean # True if the condition is met, false otherwise.
+local function hasAffix(s, v, atEnd, caseInsensitive)
 	if not s or not v then return false end
 	s, v = tostring(s), tostring(v)
 	if caseInsensitive then
 		s = s:lower()
 		v = v:lower()
 	end
-	if #s == #v then return s == v end
-	return #s > #v and s:sub(1, #v) == v
+	local len = #v
+	if #s == len then return s == v end
+	if #s < len then return false end
+	return (atEnd and s:sub(-len) or s:sub(1, len)) == v
+end
+
+---Checks if a string starts with a given prefix.
+---@param s string # The string to check.
+---@param v string # The prefix to match.
+---@param caseInsensitive boolean? # True if string comparisons ignore letter case.
+---@return boolean # True if `s` starts with `v`, false otherwise.
+local function startsWith(s, v, caseInsensitive)
+	return hasAffix(s, v, false, caseInsensitive)
 end
 
 ---Checks if a string ends with a specified suffix.
@@ -596,14 +619,7 @@ end
 ---@param caseInsensitive boolean? # True if string comparisons ignore letter case.
 ---@return boolean Returns # True if the `s` ends with the specified `v`, otherwise false.
 local function endsWith(s, v, caseInsensitive)
-	if not s or not v then return false end
-	s, v = tostring(s), tostring(v)
-	if caseInsensitive then
-		s = s:lower()
-		v = v:lower()
-	end
-	if #s == #v then return s == v end
-	return #s > #v and s:sub(- #v) == v
+	return hasAffix(s, v, true, caseInsensitive)
 end
 
 ---Checks if a given filename string ends with `.lua`.
@@ -826,9 +842,9 @@ local function serialize(x)
 	return "{" .. concat(parts, ",") .. "}"
 end
 
----Computes an Adler‑32 checksum over one or more values without allocating a new table.
+---Computes an Adler-32 checksum over one or more values without allocating a new table.
 ---@param ... any # One or more values to include in the checksum calculation.
----@return integer # 32‑bit checksum combining all arguments.
+---@return integer # 32-bit checksum combining all arguments.
 local function checksum(...)
 	local a, b = 1, 0
 	local n = select('#', ...)
@@ -848,9 +864,9 @@ end
 ---@return boolean # True if the file exists and is readable, false otherwise.
 local function fileExists(path)
 	if not isString(path) then return false end
-	local file = io.open(path, "r")
-	if file then
-		file:close()
+	local handle = io.open(path, "r")
+	if handle then
+		handle:close()
 		return true
 	end
 	return false
@@ -953,14 +969,13 @@ local function log(lvl, id, fmt, ...)
 
 	if dev_mode >= DevLevels.ALERT then
 		if runtime_full then
-			local toast = "\u{f035f} " .. msg
-
+			local tm = "\u{f035f} " .. msg
 			local tt =
 				lvl == LogLevels.ERROR and ImGui.ToastType.Error or
 				lvl == LogLevels.WARN and ImGui.ToastType.Warning or
 				ImGui.ToastType.Info
 
-			toaster_bumps[tt] = toaster_bumps[tt] and (toaster_bumps[tt] .. "\n\n" .. toast) or toast
+			toaster_bumps[tt] = toaster_bumps[tt] and (toaster_bumps[tt] .. "\n\n" .. tm) or tm
 			toaster_active = true
 		else
 			local player = Game.GetPlayer()
@@ -1017,7 +1032,7 @@ end
 ---@param id integer Timer ID to halt.
 local function callHalt(id)
 	call_timers[id] = nil
-	call_is_active = next(call_timers) ~= nil
+	call_is_active = not nilOrEmpty(call_timers)
 end
 
 --#endregion
@@ -1028,7 +1043,7 @@ end
 ---@return boolean # True if the player exists and is mounted in a vehicle, otherwise false.
 local function isVehicleMounted()
 	local player = Game.GetPlayer()
-	return player and Game.GetMountedVehicle(player) ~= nil or false
+	return player ~= nil and Game.GetMountedVehicle(player) ~= nil
 end
 
 ---Retrieves the vehicle the player is currently mounted in, if any.
@@ -1090,7 +1105,7 @@ local function getVehicleCameraKeys()
 		::continue::
 	end
 
-	if next(list) then
+	if not nilOrEmpty(list) then
 		vehicle_cache.getVehicleCameraKeys = list
 		return list
 	end
@@ -1102,7 +1117,7 @@ end
 ---@return string? # The extracted custom camera ID (e.g., "lotus_camera") or nil if not found.
 local function getCustomVehicleCameraID()
 	local cache = vehicle_cache.getCustomVehicleCameraID
-	if isString(cache) then return cache ~= "" and cache or nil end
+	if isString(cache) then return not nilOrEmpty(cache) and cache or nil end
 
 	local keys = getVehicleCameraKeys()
 	if not isTable(keys) then return nil end ---@cast keys string[]
@@ -1225,7 +1240,7 @@ local function getVehicleCameraMap()
 		::continue::
 	end
 
-	if next(map) then
+	if not nilOrEmpty(map) then
 		vehicle_cache.getVehicleCameraMap = map
 		return map
 	end
@@ -1465,7 +1480,7 @@ end
 ---Only re-applies values if they differ from the current ones in TweakDB.
 ---Requires `custom_params` to contain valid entries; otherwise, nothing happens.
 local function restoreAllCustomCameraParams()
-	if not next(custom_params) then return end
+	if nilOrEmpty(custom_params) then return end
 
 	for k, v in pairs(custom_params) do
 		local value = TweakDB:GetFlat(k)
@@ -1743,7 +1758,7 @@ end
 ---Restores modified camera offset presets to their default values.
 local function restoreModifiedPresets()
 	local changed = used_presets
-	if not next(changed) then return end
+	if nilOrEmpty(changed) then return end
 
 	local amount = #changed
 	local restored = 0
@@ -2031,7 +2046,7 @@ local function savePresetUsage()
 	if not isTable(preset_usage) then return end
 
 	local path = ".usage"
-	if not next(preset_usage) then
+	if nilOrEmpty(preset_usage) then
 		if fileExists(path) then
 			os.remove(path)
 		end
@@ -2062,7 +2077,7 @@ end
 
 ---Generates a checksum token for a camera preset by combining its ID and offset tables.
 ---@param preset ICameraPreset? # The camera preset containing fields `ID`, `Close`, `Medium`, and `Far`.
----@return integer # Adler‑32 checksum of `preset.ID`, `preset.Close`, `preset.Medium`, `preset.Far`, or -1 if invalid.
+---@return integer # Adler-32 checksum of `preset.ID`, `preset.Close`, `preset.Medium`, `preset.Far`, or -1 if invalid.
 local function getEditorPresetToken(preset)
 	if not isTable(preset) then return -1 end ---@cast preset ICameraPreset
 	return checksum(preset.ID, preset.Close, preset.Medium, preset.Far)
@@ -2094,7 +2109,7 @@ end
 ---If the entries already exist in `editor_bundles`, it simply returns them.
 ---@param name string # Vehicle name (e.g. "v_sport2_porsche_911turbo_player").
 ---@param appName string # Appearance name (e.g. "porsche_911turbo__basic_johnny").
----@param id string # Camera‑preset ID for TweakDB lookup.
+---@param id string # Camera-preset ID for TweakDB lookup.
 ---@param key string # Preset key/alias used for storage and display.
 ---@return IEditorBundle? # Returns the editor bundle containing Flux, Pivot, Finale, Nexus, and Tasks entries, or `nil` if initialization failed.
 local function getEditorBundle(name, appName, id, key)
@@ -2383,7 +2398,7 @@ end
 local function addTextCenterWrap(text, wrap)
 	local ln, w = "", ImGui.GetWindowSize()
 	for s in text:gmatch("%S+") do
-		local t = (ln == "") and s or (ln .. " " .. s)
+		local t = (nilOrEmpty(ln)) and s or (ln .. " " .. s)
 		if ImGui.CalcTextSize(t) > wrap and ln ~= "" then
 			ImGui.SetCursorPosX((w - ImGui.CalcTextSize(ln)) * 0.5)
 			ImGui.Text(ln)
@@ -2392,7 +2407,7 @@ local function addTextCenterWrap(text, wrap)
 			ln = t
 		end
 	end
-	if ln ~= "" then
+	if not nilOrEmpty(ln) then
 		ImGui.SetCursorPosX((w - ImGui.CalcTextSize(ln)) * 0.5)
 		ImGui.Text(ln)
 	end
@@ -2709,7 +2724,7 @@ end
 ---If forced or conditions are met, applies the appropriate camera preset.
 ---@param force boolean? # If true, the preset will be applied regardless of state.
 local function onMount(force)
-	if not force and (not mod_enabled or not isVehicleMounted() or next(vehicle_cache) ~= nil) then
+	if not force and (not mod_enabled or not isVehicleMounted() or not nilOrEmpty(vehicle_cache)) then
 		return
 	end
 
@@ -2813,7 +2828,7 @@ end)
 --Display a simple GUI with some options.
 registerForEvent("onDraw", function()
 	--Notification system (requires at least CET 'v1.35.1').
-	if runtime_full and toaster_active and next(toaster_bumps) then
+	if runtime_full and toaster_active and not nilOrEmpty(toaster_bumps) then
 		toaster_active = false
 		for k, v in pairs(toaster_bumps) do
 			local toast = ImGui.Toast.new(k, v)
@@ -3031,7 +3046,7 @@ registerForEvent("onDraw", function()
 				tip    = Text.GUI_TBL_LABL_CCAMID_TIP,
 				value  = customID,
 				valTip = Text.GUI_TBL_VAL_CCAMID_TIP,
-				custom = customID ~= nil
+				custom = not nilOrEmpty(customID)
 			},
 			{
 				label    = "\u{f1952}",
