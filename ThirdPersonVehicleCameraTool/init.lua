@@ -102,12 +102,11 @@ ______________________________________________
 ---@field Tasks IEditorTasks # Flags for pending rename, validate, apply, save, or restore actions.
 
 --Aliases for commonly used standard library functions to simplify code.
-local format, rep, concat, insert, sort, unpack, abs, ceil, floor, max, min, band, bor, lshift, rshift =
+local format, rep, concat, insert, unpack, abs, ceil, floor, max, min, band, bor, lshift, rshift =
 	string.format,
 	string.rep,
 	table.concat,
 	table.insert,
-	table.sort,
 	table.unpack,
 	math.abs,
 	math.ceil,
@@ -556,6 +555,8 @@ local function equals(a, b, visited)
 			end
 		end
 		return true
+	elseif areVector3(a, b) then
+		return equals(a.x, b.x) and equals(a.y, b.y) and equals(a.z, b.z)
 	end
 
 	return false
@@ -704,7 +705,7 @@ local function opairs(t)
 	for k in pairs(t) do
 		insert(ks, k)
 	end
-	sort(ks, function(a, b)
+	table.sort(ks, function(a, b)
 		return tostring(a) < tostring(b)
 	end)
 	local i = 0
@@ -804,7 +805,7 @@ local function serialize(x)
 			for _, a in ipairs({ "x", "y", "z" }) do
 				insert(t, serialize(x[a]))
 			end
-			return format("Vector3 { x = %s, y = %s, z = %s }", unpack(t))
+			return format("Vector3{x=%s,y=%s,z=%s}", unpack(t))
 		else
 			return tostring(x)
 		end
@@ -934,17 +935,16 @@ local function getCameraTweakKey(preset, path, var)
 		if not isString(overrides.Key) then
 			return nil
 		end
-		local key = format("%s_%s.%s", overrides.Key, path, var)
-		return key
+		return format("%s_%s.%s", overrides.Key, path, var)
 	end
 
-	local isBasilisk = preset.ID == "v_militech_basilisk_CameraPreset"
+	local isBasilisk = id == "v_militech_basilisk_CameraPreset"
 	if isBasilisk and (startsWith(path, "Low") or contains(path, "DriverCombat")) then
 		return nil
 	end
 
 	local section = isBasilisk and "Vehicle" or "Camera"
-	return format("%s.VehicleTPP_%s_%s.%s", section, preset.ID, path, var)
+	return format("%s.VehicleTPP_%s_%s.%s", section, id, path, var)
 end
 
 ---Fetches the default rotation pitch value for a vehicle camera.
@@ -979,17 +979,20 @@ end
 ---@param path string # The camera path for the vehicle.
 ---@param value number # The value to set for the default rotation pitch.
 local function setCameraDefaultRotationPitch(preset, path, value)
+	if not isNumber(value) then return end
+
 	local key = getCameraTweakKey(preset, path, "defaultRotationPitch")
 	if not key then return end
 
 	local fallback = getCameraDefaultRotationPitch(preset, path)
+	if not fallback then return end
 
 	if startsWith(path, "Low", true) then
 		value = value - 7
 	end
 
 	local overrideDue = get(preset, {}, "Overrides").Due
-	if not isNumber(value) or (not overrideDue and equals(value, fallback)) then return end
+	if not overrideDue and equals(value, fallback) then return end
 
 	if overrideDue and not custom_params[key] then
 		custom_params[key] = fallback
@@ -1019,13 +1022,16 @@ end
 ---@param y number # The Y-coordinate of the camera position.
 ---@param z number # The Z-coordinate of the camera position.
 local function setCameraLookAtOffset(preset, path, x, y, z)
+	if not areNumber(x, y, z) then return end
+
 	local key = getCameraTweakKey(preset, path, "lookAtOffset")
 	if not key then return end
 
 	local fallback = getCameraLookAtOffset(preset, path)
-	if not fallback or (equals(x, fallback.x) and equals(y, fallback.y) and equals(z, fallback.z)) then return end
+	if not fallback then return end
 
 	local value = Vector3.new(x or fallback.x, y or fallback.y, z or fallback.z)
+	if equals(value, fallback) then return end
 
 	if get(preset, {}, "Overrides").Due and not custom_params[key] then
 		custom_params[key] = fallback
@@ -1197,10 +1203,10 @@ local function getVehicleCameraID(vehicle)
 	if not isTable(keys) then return nil end ---@cast keys string[]
 
 	for _, v in pairs(keys) do
-		local m = v:match("^[%a]+%.VehicleTPP_([%w_]+)_[%w_]+_[%w_]+")
-		if m then
-			shared_cache.VehicleCameraID = m
-			return m
+		local match = v:match("^[%a]+%.VehicleTPP_([%w_]+)_[%w_]+_[%w_]+")
+		if match then
+			shared_cache.VehicleCameraID = match
+			return match
 		end
 	end
 
@@ -1297,8 +1303,8 @@ end
 ---@param id string # The camera ID of the mounted vehicle.
 ---@return boolean # True if the preset exists and has a matching ID, false otherwise.
 local function presetExists(key, id)
-	local preset = deep(camera_presets, key)
-	return preset.ID == id
+	local preset = get(camera_presets, nil, key)
+	return preset and preset.ID == id
 end
 
 ---Attempts to find the best matching key in the `camera_presets` table using one or more candidate values.
@@ -1377,7 +1383,7 @@ local function getPreset(id)
 		}
 
 		if preset.Far and preset.Medium and preset.Close then
-			if dev_mode >= DevLevels.FULL then
+			if dev_mode >= DevLevels.ALERT then
 				log(LogLevels.INFO, 1361, Text.LOG_CAM_OSET_DONE, id)
 			end
 			return preset
@@ -1401,7 +1407,7 @@ local function getDefaultPreset(preset)
 
 	for _, item in pairs(camera_presets) do
 		if item.IsDefault and item.ID == id then
-			if dev_mode >= DevLevels.FULL then
+			if dev_mode >= DevLevels.ALERT then
 				log(LogLevels.INFO, 1396, Text.LOG_FOUND_DEF, id)
 			end
 			return item
@@ -2094,8 +2100,7 @@ end
 local function pushColors(idx, color)
 	if not areNumber(idx, color) then return 0 end
 
-	local hoveredIdx = idx + 1
-	local activeIdx = idx + 2
+	local hoveredIdx, activeIdx = idx + 1, idx + 2
 	local base, hover, active = getThreeColorsFrom(idx, color)
 
 	ImGui.PushStyleColor(idx, base)
@@ -2191,8 +2196,7 @@ local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	ImGui.Separator()
 	ImGui.Dummy(0, 2)
 
-	local width = ceil(80 * scale)
-	local height = floor(30 * scale)
+	local width, height = ceil(80 * scale), floor(30 * scale)
 
 	---@cast yesBtnColor number
 	local pushed = isNumber(yesBtnColor) and pushColors(ImGuiCol.Button, yesBtnColor) or 0
@@ -2421,8 +2425,8 @@ registerForEvent("onDraw", function()
 			return id
 		end,
 		function()
-			local cache = shared_cache.OnDrawPresetKey
-			if isString(cache) then return cache end
+			key = shared_cache.OnDrawPresetKey
+			if isString(key) then return key end
 
 			key = name ~= appName and findPresetKey(name, appName) or findPresetKey(name) or name
 			shared_cache.OnDrawPresetKey = key
