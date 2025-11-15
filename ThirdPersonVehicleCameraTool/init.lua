@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-09-07, 20:09 UTC+01:00 (MEZ)
+Version: 2025-09-08, 23:13 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -160,6 +160,59 @@ local Colors = {
 	OLIVE = 0x8a297a68
 }
 
+---Constant array of all default parameter keys.
+---@type string[]
+local DefaultParamKeys = {
+	"Camera.VehicleTPP_DefaultParams",
+	"Camera.VehicleTPP_2w_DefaultParams"
+}
+
+---Constant array of all default parameter variables.
+---@type string[]
+local DefaultParamVars = {
+	"airFlowDistortion",
+	"autoCenterMaxSpeedThreshold",
+	"autoCenterSpeed",
+	"cameraBoomExtensionSpeed",
+	"cameraMaxPitch",
+	"cameraMinPitch",
+	"cameraSphereRadius",
+	"collisionDetection",
+	"drivingDirectionCompensation",
+	"drivingDirectionCompensationAngle",
+	"drivingDirectionCompensationAngleSmooth",
+	"drivingDirectionCompensationAngularVelocityMin",
+	"drivingDirectionCompensationSpeedCoef",
+	"drivingDirectionCompensationSpeedMax",
+	"drivingDirectionCompensationSpeedMin",
+	"elasticBoomAcceleration",
+	"elasticBoomAccelerationExpansionLength",
+	"elasticBoomForwardAccelerationCoef",
+	"elasticBoomSpeedExpansionLength",
+	"elasticBoomSpeedExpansionSpeedMax",
+	"elasticBoomSpeedExpansionSpeedMin",
+	"elasticBoomVelocity",
+	"fov",
+	"headLookAtCenterYawThreshold",
+	"headLookAtMaxPitchDown",
+	"headLookAtMaxPitchUp",
+	"headLookAtMaxYaw",
+	"headLookAtRotationSpeed",
+	"inverseCameraInputBreakThreshold",
+	"lockedCamera",
+	"slopeAdjustement",
+	"slopeCorrectionInAirDampFactor",
+	"slopeCorrectionInAirFallCoef",
+	"slopeCorrectionInAirPitchMax",
+	"slopeCorrectionInAirPitchMin",
+	"slopeCorrectionInAirRaiseCoef",
+	"slopeCorrectionInAirSpeedMax",
+	"slopeCorrectionInAirStrength",
+	"slopeCorrectionOnGroundPitchMax",
+	"slopeCorrectionOnGroundPitchMin",
+	"slopeCorrectionOnGroundStrength"
+}
+
 ---Constant array of all camera levels.
 ---@type string[]
 local CameraLevels = {
@@ -175,6 +228,21 @@ local CameraLevels = {
 	"Low_DriverCombatClose",
 	"Low_DriverCombatMedium",
 	"Low_DriverCombatFar"
+}
+
+---Constant array of all camera variables.
+---@type string[]
+local CameraVars = {
+	"airFlowDistortionSizeHorizontal",
+	"airFlowDistortionSizeVertical",
+	"airFlowDistortionSpeedMax",
+	"airFlowDistortionSpeedMin",
+	"baseBoomLength",
+	"boomLengthOffset",
+	"defaultRotationPitch",
+	"distance",
+	"height",
+	"lookAtOffset"
 }
 
 ---Constant array of base camera levels.
@@ -301,13 +369,6 @@ local padding_width = 0
 ---When set to true, disables dynamic window padding adjustments and uses the fixed `padding_width` value.
 ---@type boolean
 local padding_locked = false
-
----Global default parameter base keys.
----@type string[]
-local global_param_keys = {
-	"Camera.VehicleTPP_DefaultParams",
-	"Camera.VehicleTPP_2w_DefaultParams"
-}
 
 ---Global default parameter values.
 ---@type table<string, IDefaultParamData>
@@ -1286,7 +1347,7 @@ local function getCustomVehicleCameraID()
 			id = stripSub(id, "_", -1)
 		end
 
-		--Only return non-empty ID.
+		--Only insert non-empty ID.
 		if #id > 0 and not seen[id] then
 			insert(ids, id)
 			seen[id] = true
@@ -1309,7 +1370,7 @@ local function getCustomVehicleCameraID()
 		::continue::
 	end
 
-	if #ids == 1 then
+	if isTableValid(ids) then
 		local result = tostring(ids[1])
 		vehicle_cache.getCustomVehicleCameraID = result
 		return result
@@ -1378,6 +1439,7 @@ local function getVehicleCameraMap()
 		local search = ({ Low = "_high", High = "_low" })[heightName]
 		if search and contains(v:lower(), search) then
 			heightName = heightName == "Low" and "High" or "Low"
+			TweakDB:SetFlat(v .. ".height", heightName)
 		end
 
 		map[format("%s_%s", heightName, distanceName)] = v
@@ -1440,10 +1502,10 @@ end
 ---default assignment, type coercion and optional restoring.
 ---@param restore boolean? # If true, values are reset to their default.
 local function updateDefaultParams(restore)
-	if not areTableValid(global_param_keys, global_params) then return end
+	if not areTableValid(DefaultParamKeys, global_params) then return end
 
 	for varName, data in pairs(global_params) do
-		for _, baseKey in ipairs(global_param_keys) do
+		for _, baseKey in ipairs(DefaultParamKeys) do
 			local key = baseKey .. "." .. varName
 			local value = TweakDB:GetFlat(key)
 			if value == nil then goto continue end
@@ -1486,32 +1548,33 @@ end
 ---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera level path (e.g. "High_Close").
 ---@param var string # The variable name.
----@return string? # The formatted TweakDB record key.
----@return boolean # True if key is a custom key, otherwise false or nil.
-local function getCameraTweakKey(preset, path, var)
-	if not isTable(preset) then return nil, false end
+---@param skipCustom boolean? # True, skips checking for a custom key; otherwise, custom keys will be evaluated.
+---@return string? # The formatted TweakDB record key (may be a custom key).
+---@return string? # The original key, only returned if the formatted key is a custom entry.
+local function getCameraTweakKey(preset, path, var, skipCustom)
+	if not isTable(preset) then return nil, nil end
 
 	local id = preset.ID
-	if not areString(id, path, var) then return nil, false end
+	if not areString(id, path, var) then return nil, nil end
 
-	if isString(getCustomVehicleCameraID()) then
+	if not skipCustom and isString(getCustomVehicleCameraID()) then
 		local map = getVehicleCameraMap()
 		if isTableValid(map) then
 			---@cast map table
 			local key = map[path]
 			if isString(key) then
-				return format("%s.%s", key, var), true
+				return format("%s.%s", key, var), getCameraTweakKey(preset, path, var, true)
 			end
 		end
 	end
 
 	local isBasilisk = id == "v_militech_basilisk_CameraPreset"
 	if isBasilisk and (startsWith(path, "Low") or contains(path, "DriverCombat")) then
-		return nil, false
+		return nil, nil
 	end
 
 	local section = isBasilisk and "Vehicle" or "Camera"
-	return format("%s.VehicleTPP_%s_%s.%s", section, id, path, var), false
+	return format("%s.VehicleTPP_%s_%s.%s", section, id, path, var), nil
 end
 
 ---Gets the default rotation pitch value for a given camera preset and path.
@@ -1521,7 +1584,7 @@ end
 local function getCameraDefaultRotationPitch(preset, path)
 	local key = getCameraTweakKey(preset, path, "defaultRotationPitch")
 
-	local isLow = startsWith(path, "Low_", true)
+	local isLow = startsWith(path, "Low_")
 	local defaults = {
 		["4w_aerondight"]                   = { low = 04, high = 12 },
 		["4w_Preset"]                       = { low = 04, high = 15 },
@@ -1560,7 +1623,8 @@ local function setCameraDefaultRotationPitch(preset, path, value)
 	local fallback = getCameraDefaultRotationPitch(preset, path)
 	if not fallback then return end
 
-	if startsWith(path, "Low_", true) then
+	--Adjust low camera.
+	if startsWith(path, "Low_") then
 		value = value - 7
 
 		if dev_mode >= DevLevels.FULL then
@@ -1679,16 +1743,16 @@ end
 
 ---Resets custom camera behavior values for the mounted vehicle to their global defaults.
 ---Ensures modded vehicles do not override global TweakDB values such as FOV or camera locking.
----This operation can be undone using `restoreAllCustomCameraParams`.
+---This operation can be undone using `restoreAllCustomCameraData`.
 ---@param key string # The vehicle's preset key. Used for cache.
-local function resetCustomCameraParams(key)
+local function resetCustomDefaultParams(key)
 	if not key then return end
 
-	local cache = shared_cache.resetCustomCameraParams or {}
+	local cache = shared_cache.resetCustomDefaultParams or {}
 	if cache[key] then return end
 
-	shared_cache.resetCustomCameraParams = cache
-	shared_cache.resetCustomCameraParams[key] = true
+	shared_cache.resetCustomDefaultParams = cache
+	shared_cache.resetCustomDefaultParams[key] = true
 
 	local vehicle = getMountedVehicle()
 	if not vehicle then return end
@@ -1703,14 +1767,15 @@ local function resetCustomCameraParams(key)
 	if not cptid then return end
 
 	local cparam = TDBID.ToStringDEBUG(cptid)
-	if not cparam or contains(global_param_keys, cparam) then return end
+	if not cparam or contains(DefaultParamKeys, cparam) then return end
 
-	local baseKey = global_param_keys[contains(cparam:lower(), "_2w_") and 2 or 1]
-	for varName, _ in pairs(global_params) do
-		local path = cparam .. "." .. varName
-		local val = TweakDB:GetFlat(path)
+	local baseKey = DefaultParamKeys[contains(cparam:lower(), "_2w_") and 2 or 1]
+	for _, varName in ipairs(DefaultParamVars) do
+		local cKey = cparam .. "." .. varName
+		local val = TweakDB:GetFlat(cKey)
 		if not val then goto continue end
 
+		local rKey = baseKey .. "." .. varName
 		local ref = TweakDB:GetFlat(baseKey .. "." .. varName)
 		if not ref then
 			if not isBoolean(val) then goto continue end
@@ -1718,23 +1783,56 @@ local function resetCustomCameraParams(key)
 		end
 
 		if not equals(val, ref) then
-			if not custom_params[path] then
-				custom_params[path] = val
+			if not custom_params[cKey] then
+				custom_params[cKey] = val
 			end
 
-			TweakDB:SetFlat(path, ref)
+			TweakDB:SetFlat(cKey, ref)
 
-			logF(DevLevels.BASIC, LogLevels.INFO, 0x460a, Text.LOG_PARAM_MANIP, path, val, ref)
+			logF(DevLevels.BASIC, LogLevels.INFO, 0x460a, Text.LOG_PARAM_MANIP, cKey, val, ref, rKey)
 		end
 
 		::continue::
 	end
 end
 
+---Resets custom camera behavior values for the mounted vehicle to their defaults.
+---This operation can be undone using `restoreAllCustomCameraData`.
+---@param key string # The vehicle's preset key. Used for cache.
+local function resetCustomCameraVars(key, preset)
+	if not key then return end
+
+	local cache = shared_cache.resetCustomCameraVars or {}
+	if cache[key] then return end
+
+	shared_cache.resetCustomCameraVars = cache
+	shared_cache.resetCustomCameraVars[key] = true
+
+	for _, path in ipairs(CameraLevels) do
+		for _, var in ipairs(CameraVars) do
+			local ckey, dkey = getCameraTweakKey(preset, path, var)
+			if not ckey or not dkey or custom_params[ckey] then goto continue end
+
+			local def = TweakDB:GetFlat(dkey)
+			if def == nil then goto continue end
+
+			local val = TweakDB:GetFlat(ckey)
+			if equals(val, def) then goto continue end
+
+			custom_params[ckey] = val
+			TweakDB:SetFlat(ckey, def)
+
+			logF(DevLevels.BASIC, LogLevels.INFO, 0x810b, Text.LOG_PARAM_MANIP, ckey, val, def, dkey)
+
+			::continue::
+		end
+	end
+end
+
 ---Restores all previously overridden custom camera behavior values.
 ---Only re-applies values if they differ from the current ones in TweakDB.
 ---Requires `custom_params` to contain valid entries; otherwise, nothing happens.
-local function restoreAllCustomCameraParams()
+local function restoreAllCustomCameraData()
 	if nilOrEmpty(custom_params) then return end
 
 	for k, v in pairs(custom_params) do
@@ -1749,7 +1847,8 @@ local function restoreAllCustomCameraParams()
 
 	custom_params = {}
 
-	shared_cache.resetCustomCameraParams = nil
+	shared_cache.resetCustomDefaultParams = nil
+	shared_cache.resetCustomCameraVars = nil
 end
 
 --#endregion
@@ -1952,7 +2051,8 @@ local function applyPreset(preset, id)
 		local pset = camera_presets[key]
 		if not isTableValid(pset) then return end
 
-		resetCustomCameraParams(key)
+		resetCustomDefaultParams(key)
+		resetCustomCameraVars(key, pset)
 		applyPreset(pset, cid)
 
 		--Tracks usage statistics.
@@ -3211,15 +3311,15 @@ end
 local function onShutdown()
 	saveGlobalOptions()
 	restoreAllPresets()
-	restoreAllCustomCameraParams()
+	restoreAllCustomCameraData()
 	savePresetUsage()
 	updateDefaultParams(true)
 end
 
---This event is triggered when the CET environment initializes for a particular game session.
-registerForEvent("onInit", function()
+--[[
+---This event gets triggered even before `onInit`.
+registerForEvent("onTweak", function()
 	--Save default presets.
-	--[[
 	local defaults = {
 		"2w_Preset",
 		"4w_911",
@@ -3267,8 +3367,11 @@ registerForEvent("onInit", function()
 			savePreset(preset.ID, preset, true, true)
 		end
 	end
-	--]]
+end)
+--]]
 
+--This event is triggered when the CET initializes this mod.
+registerForEvent("onInit", function()
 	local backupDevMode
 
 	--CET version check.
@@ -3615,13 +3718,13 @@ registerForEvent("onDraw", function()
 		ImGui.End()
 	end
 
+	local presetName = (flux.Name ~= key or presetExists(key, id)) and flux.Name or id
 	if ImGui.BeginTable("PresetInfo", 2, ImGuiTableFlags.Borders) then
 		ImGui.TableSetupColumn("\u{f11be}", ImGuiTableColumnFlags.WidthFixed, -1)
 		ImGui.TableSetupColumn("\u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
 		local customID = getCustomVehicleCameraID()
-
 		local rows = {
 			{ label = "\u{f010b}", tip = Text.GUI_TBL_LABL_VEH_TIP,   value = name },
 			{ label = "\u{f07ac}", tip = Text.GUI_TBL_LABL_APP_TIP,   value = appName },
@@ -3636,7 +3739,7 @@ registerForEvent("onDraw", function()
 			{
 				label    = "\u{f1952}",
 				tip      = Text.GUI_TBL_LABL_PSET_TIP,
-				value    = (flux.Name ~= key or presetExists(key, id)) and flux.Name or id,
+				value    = presetName,
 				valTip   = Text.GUI_TBL_VAL_PSET_TIP,
 				editable = true
 			}
@@ -3809,7 +3912,8 @@ registerForEvent("onDraw", function()
 				ImGui.TableSetColumnIndex(j)
 				ImGui.PushItemWidth(-1)
 
-				local pushd = not equals(curVal, defVal) and pushColors(ImGuiCol.FrameBg, Colors.FIR) or 0
+				local pushd = not equals(curVal, defVal) and
+					pushColors(ImGuiCol.FrameBg, (id ~= presetName and Colors.FIR or Colors.GARNET)) or 0
 				local newVal = ImGui.DragFloat(format("##%s_%s", level, field), curVal, speed, minVal, maxVal, fmt)
 				if not equals(newVal, curVal) then
 					newVal = min(max(newVal, minVal), maxVal)

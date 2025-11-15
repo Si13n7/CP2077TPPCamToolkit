@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-09-07, 12:53 UTC+01:00 (MEZ)
+Version: 2025-09-08, 23:13 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -91,7 +91,7 @@ return {
 	LOG_MOD_ON = "Mod has been enabled!",
 	LOG_PARAM_BAK = "Backup param (key: '%s'; value: '%s').",
 	LOG_PARAM_LH = "Param (key: '%s'; path: '%s') is low height.",
-	LOG_PARAM_MANIP = "Global param manipulation detected (key: '%s'; value: '%s'), reset value to '%s'.",
+	LOG_PARAM_MANIP = "Param manipulation detected (key: '%s'; value: '%s'), reset value to '%s' from key '%s'.",
 	LOG_PARAM_REST = "Restore param (key: '%s') to value '%s'.",
 	LOG_PARAM_SET = "Set param (key: '%s') to value '%s'.",
 	LOG_PSET_SAVED = "File 'presets/%s.lua' was saved successfully.",
