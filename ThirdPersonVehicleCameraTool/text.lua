@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-10-17, 18:36 UTC+01:00 (MEZ)
+Version: 2025-10-19, 13:14 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -142,13 +142,13 @@ return {
 	GUI_TBL_VAL_STATE_2 = "Custom Player Vehicle",
 	GUI_TBL_VAL_CAMH_0 = "Low",
 	GUI_TBL_VAL_CAMH_1 = "High",
-	GUI_TBL_VAL_CAMA__0 = "FPP",
-	GUI_TBL_VAL_CAMA__1 = "TPP / %s / Close",
-	GUI_TBL_VAL_CAMA__2 = "TPP / %s / Medium",
-	GUI_TBL_VAL_CAMA__3 = "TPP / %s / Far",
-	GUI_TBL_VAL_CAMA__4 = "TPP / Combat / %s / Close",
-	GUI_TBL_VAL_CAMA__5 = "TPP / Combat / %s / Medium",
-	GUI_TBL_VAL_CAMA__6 = "TPP / Combat / %s / Far",
+	GUI_TBL_VAL_CAMA_0 = "FPP",
+	GUI_TBL_VAL_CAMA_1 = "TPP / %s / Close",
+	GUI_TBL_VAL_CAMA_2 = "TPP / %s / Medium",
+	GUI_TBL_VAL_CAMA_3 = "TPP / %s / Far",
+	GUI_TBL_VAL_CAMA_4 = "TPP / Combat / %s / Close",
+	GUI_TBL_VAL_CAMA_5 = "TPP / Combat / %s / Medium",
+	GUI_TBL_VAL_CAMA_6 = "TPP / Combat / %s / Far",
 	GUI_TBL_VAL_CCID_TIP = "\u{f1980} Camera Access Map| |Distance Level:|Database Access Path:",
 	GUI_TBL_VAL_PSET_TIP1 = "\u{f1668} Active Camera Preset\n\nWhen saving, the name \"%s\" is used. The new name must exactly match the value of \u{f1b8d} or \u{f0301}, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f1b8d} (e.g. \"%s\")\n\u{f0b3b}\u{f0301} (e.g. \"%s\")\n\u{f0b3c}Prefix of \u{f1b8d} (e.g. \"%s\")\n\u{f0b3d}Prefix of \u{f0301} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Explorer to delete presets, if necessary.",
 	GUI_TBL_VAL_PSET_TIP2 = "\u{f1668} Active Camera Preset\n\nWhen saving, the name \"%s\" is used. The new name must exactly match the value of \u{f1b8d}, or at least be its prefix.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f1b8d} (e.g. \"%s\")\n\u{f0b3b}Prefix of \u{f1b8d} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Explorer to delete presets, if necessary.",

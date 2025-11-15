@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-10-17, 18:42 UTC+01:00 (MEZ)
+Version: 2025-10-19, 13:14 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -314,7 +314,7 @@ local ExplorerCommands = {
 	VANILLA = ":vanilla"
 }
 
----Default parameters, including TweakDB keys, variables, and their values.
+---Default parameter constants, including TweakDB keys, variables, and their values.
 local DefaultParams = {
 	---Indexed TweakDB keys where the first entry applies to four-wheeled vehicles and the second to two-wheeled vehicles.
 	---@type table<integer, string>
@@ -323,51 +323,251 @@ local DefaultParams = {
 		"Camera.VehicleTPP_2w_DefaultParams"
 	},
 
-	---The string represents the variable name, and their value is usually a boolean or a number.
-	---However, it can also be a table containing the actual values, separated for four-wheeled and two-wheeled vehicles.
+	---Defines all constant default parameters for vehicle camera configuration.
+	---Each key represents the internal name of a parameter, mapped to a structured definition table.
+	---These values are static and never modified at runtime.
+	---`Default` may be a single value or a two-element table specifying separate defaults
+	---for four-wheeled and two-wheeled vehicles.
 	---@type table<string, IDefaultParam>
 	Vars = {
-		airFlowDistortion                              = { Default = true, Tip = Text.GUI_ASET_AFD_TIP },
-		autoCenterMaxSpeedThreshold                    = { Default = 20, Min = 0, Max = 300, Tip = Text.GUI_ASET_ACMST_TIP },
-		autoCenterSpeed                                = { Default = 5, Min = 0, Max = 10, Tip = Text.GUI_ASET_ACS_TIP },
-		cameraBoomExtensionSpeed                       = { Default = 3, Min = 0, Max = 10, Tip = Text.GUI_ASET_CBES_TIP },
-		cameraMaxPitch                                 = { Default = 80, Min = 0, Max = 90, Tip = Text.GUI_ASET_CMAXP_TIP },
-		cameraMinPitch                                 = { Default = -28, Min = -90, Max = 0, Tip = Text.GUI_ASET_CMINP_TIP },
-		cameraSphereRadius                             = { Default = 1, Min = 0.2, Max = 5, Step = 0.01, Tip = Text.GUI_ASET_CSR_TIP },
-		collisionDetection                             = { Default = true, Tip = Text.GUI_ASET_CD_TIP },
-		drivingDirectionCompensation                   = { Default = true, Tip = Text.GUI_ASET_DDC_TIP },
-		drivingDirectionCompensationAngle              = { Default = 100, Min = -180, Max = 180, Tip = Text.GUI_ASET_DDCA_TIP },
-		drivingDirectionCompensationAngleSmooth        = { Default = 70, Min = -180, Max = 180, Tip = Text.GUI_ASET_DDCAS_TIP },
-		drivingDirectionCompensationAngularVelocityMin = { Default = 150, Min = 0, Max = 500, Tip = Text.GUI_ASET_DDCAVM_TIP },
-		drivingDirectionCompensationSpeedCoef          = { Default = 1, Min = 0, Max = 5, Tip = Text.GUI_ASET_DDCSC_TIP },
-		drivingDirectionCompensationSpeedMax           = { Default = 120, Min = 0, Max = 300, Tip = Text.GUI_ASET_DDCSX_TIP },
-		drivingDirectionCompensationSpeedMin           = { Default = 4, Min = 0, Max = 100, Tip = Text.GUI_ASET_DDCSN_TIP },
-		elasticBoomAcceleration                        = { Default = true, Tip = Text.GUI_ASET_EBA_TIP },
-		elasticBoomAccelerationExpansionLength         = { Default = 0.5, Min = 0, Max = 5, Step = 0.01, Tip = Text.GUI_ASET_EBAEL_TIP },
-		elasticBoomForwardAccelerationCoef             = { Default = 10, Min = 0, Max = 20, Tip = Text.GUI_ASET_EBAFAC_TIP },
-		elasticBoomSpeedExpansionLength                = { Default = 0.5, Min = 0, Max = 5, Step = 0.01, Tip = Text.GUI_ASET_EBSEL_TIP },
-		elasticBoomSpeedExpansionSpeedMax              = { Default = 20, Min = 0, Max = 300, Tip = Text.GUI_ASET_EBSESX_TIP },
-		elasticBoomSpeedExpansionSpeedMin              = { Default = 10, Min = 0, Max = 100, Tip = Text.GUI_ASET_EBSESN_TIP },
-		elasticBoomVelocity                            = { Default = true, Tip = Text.GUI_ASET_EBV_TIP },
-		fov                                            = { Default = 69, Min = 40, Max = 120, Tip = Text.GUI_ASET_FOV_TIP },
-		headLookAtCenterYawThreshold                   = { Default = { 100, 140 }, Min = 0, Max = 180, Tip = Text.GUI_ASET_HLACYT_TIP },
-		headLookAtMaxPitchDown                         = { Default = { 40, 10 }, Min = 0, Max = 90, Tip = Text.GUI_ASET_HLAMPD_TIP },
-		headLookAtMaxPitchUp                           = { Default = { 0, 30 }, Min = 0, Max = 90, Tip = Text.GUI_ASET_HLAMPU_TIP },
-		headLookAtMaxYaw                               = { Default = { 70, 100 }, Min = 0, Max = 180, Tip = Text.GUI_ASET_HLAMY_TIP },
-		headLookAtRotationSpeed                        = { Default = { 0.8, 2 }, Min = 0.1, Max = 5, Step = 0.01, Tip = Text.GUI_ASET_HLARS_TIP },
-		inverseCameraInputBreakThreshold               = { Default = 30, Min = 0, Max = 180, Tip = Text.GUI_ASET_ICIBT_TIP },
-		lockedCamera                                   = { Default = false, Tip = Text.GUI_ASET_LC_TIP },
-		slopeAdjustement                               = { Default = true, Tip = Text.GUI_ASET_SA_TIP },
-		slopeCorrectionInAirDampFactor                 = { Default = 0.1, Min = 0, Max = 1, Step = 0.01, Tip = Text.GUI_ASET_SCIADF_TIP },
-		slopeCorrectionInAirFallCoef                   = { Default = 2, Min = 0, Max = 5, Tip = Text.GUI_ASET_SCIAFC_TIP },
-		slopeCorrectionInAirPitchMax                   = { Default = 30, Min = 0, Max = 90, Tip = Text.GUI_ASET_SCIAPX_TIP },
-		slopeCorrectionInAirPitchMin                   = { Default = -30, Min = -90, Max = 0, Tip = Text.GUI_ASET_SCIAPN_TIP },
-		slopeCorrectionInAirRaiseCoef                  = { Default = 0.5, Min = 0, Max = 2, Step = 0.01, Tip = Text.GUI_ASET_SCIARC_TIP },
-		slopeCorrectionInAirSpeedMax                   = { Default = 10, Min = 0, Max = 100, Tip = Text.GUI_ASET_SCIASX_TIP },
-		slopeCorrectionInAirStrength                   = { Default = 20, Min = 0, Max = 50, Tip = Text.GUI_ASET_SCIAS_TIP },
-		slopeCorrectionOnGroundPitchMax                = { Default = 30, Min = 0, Max = 90, Tip = Text.GUI_ASET_SCOGPX_TIP },
-		slopeCorrectionOnGroundPitchMin                = { Default = -30, Min = -90, Max = 0, Tip = Text.GUI_ASET_SCOGPN_TIP },
-		slopeCorrectionOnGroundStrength                = { Default = 4, Min = 0, Max = 10, Tip = Text.GUI_ASET_SCOGS_TIP }
+		airFlowDistortion = {
+			Default = true,
+			Tip = Text.GUI_ASET_AFD_TIP
+		},
+		autoCenterMaxSpeedThreshold = {
+			Default = 20,
+			Min = 0,
+			Max = 300,
+			Tip = Text.GUI_ASET_ACMST_TIP
+		},
+		autoCenterSpeed = {
+			Default = 5,
+			Min = 0,
+			Max = 10,
+			Tip = Text.GUI_ASET_ACS_TIP
+		},
+		cameraBoomExtensionSpeed = {
+			Default = 3,
+			Min = 0,
+			Max = 10,
+			Tip = Text.GUI_ASET_CBES_TIP
+		},
+		cameraMaxPitch = {
+			Default = 80,
+			Min = 0,
+			Max = 90,
+			Tip = Text.GUI_ASET_CMAXP_TIP
+		},
+		cameraMinPitch = {
+			Default = -28,
+			Min = -90,
+			Max = 0,
+			Tip = Text.GUI_ASET_CMINP_TIP
+		},
+		cameraSphereRadius = {
+			Default = 1,
+			Min = 0.2,
+			Max = 5,
+			Step = 0.01,
+			Tip = Text.GUI_ASET_CSR_TIP
+		},
+		collisionDetection = {
+			Default = true,
+			Tip = Text.GUI_ASET_CD_TIP
+		},
+		drivingDirectionCompensation = {
+			Default = true,
+			Tip = Text.GUI_ASET_DDC_TIP
+		},
+		drivingDirectionCompensationAngle = {
+			Default = 100,
+			Min = -180,
+			Max = 180,
+			Tip = Text.GUI_ASET_DDCA_TIP
+		},
+		drivingDirectionCompensationAngleSmooth = {
+			Default = 70,
+			Min = -180,
+			Max = 180,
+			Tip = Text.GUI_ASET_DDCAS_TIP
+		},
+		drivingDirectionCompensationAngularVelocityMin = {
+			Default = 150,
+			Min = 0,
+			Max = 500,
+			Tip = Text.GUI_ASET_DDCAVM_TIP
+		},
+		drivingDirectionCompensationSpeedCoef = {
+			Default = 1,
+			Min = 0,
+			Max = 5,
+			Tip = Text.GUI_ASET_DDCSC_TIP
+		},
+		drivingDirectionCompensationSpeedMax = {
+			Default = 120,
+			Min = 0,
+			Max = 300,
+			Tip = Text.GUI_ASET_DDCSX_TIP
+		},
+		drivingDirectionCompensationSpeedMin = {
+			Default = 4,
+			Min = 0,
+			Max = 100,
+			Tip = Text.GUI_ASET_DDCSN_TIP
+		},
+		elasticBoomAcceleration = {
+			Default = true,
+			Tip = Text.GUI_ASET_EBA_TIP
+		},
+		elasticBoomAccelerationExpansionLength = {
+			Default = 0.5,
+			Min = 0,
+			Max = 5,
+			Step = 0.01,
+			Tip = Text.GUI_ASET_EBAEL_TIP
+		},
+		elasticBoomForwardAccelerationCoef = {
+			Default = 10,
+			Min = 0,
+			Max = 20,
+			Tip = Text.GUI_ASET_EBAFAC_TIP
+		},
+		elasticBoomSpeedExpansionLength = {
+			Default = 0.5,
+			Min = 0,
+			Max = 5,
+			Step = 0.01,
+			Tip = Text.GUI_ASET_EBSEL_TIP
+		},
+		elasticBoomSpeedExpansionSpeedMax = {
+			Default = 20,
+			Min = 0,
+			Max = 300,
+			Tip = Text.GUI_ASET_EBSESX_TIP
+		},
+		elasticBoomSpeedExpansionSpeedMin = {
+			Default = 10,
+			Min = 0,
+			Max = 100,
+			Tip = Text.GUI_ASET_EBSESN_TIP
+		},
+		elasticBoomVelocity = {
+			Default = true,
+			Tip = Text.GUI_ASET_EBV_TIP
+		},
+		fov = {
+			Default = 69,
+			Min = 40,
+			Max = 120,
+			Tip = Text.GUI_ASET_FOV_TIP
+		},
+		headLookAtCenterYawThreshold = {
+			Default = { 100, 140 },
+			Min = 0,
+			Max = 180,
+			Tip = Text.GUI_ASET_HLACYT_TIP
+		},
+		headLookAtMaxPitchDown = {
+			Default = { 40, 10 },
+			Min = 0,
+			Max = 90,
+			Tip = Text.GUI_ASET_HLAMPD_TIP
+		},
+		headLookAtMaxPitchUp = {
+			Default = { 0, 30 },
+			Min = 0,
+			Max = 90,
+			Tip = Text.GUI_ASET_HLAMPU_TIP
+		},
+		headLookAtMaxYaw = {
+			Default = { 70, 100 },
+			Min = 0,
+			Max = 180,
+			Tip = Text.GUI_ASET_HLAMY_TIP
+		},
+		headLookAtRotationSpeed = {
+			Default = { 0.8, 2 },
+			Min = 0.1,
+			Max = 5,
+			Step = 0.01,
+			Tip = Text.GUI_ASET_HLARS_TIP
+		},
+		inverseCameraInputBreakThreshold = {
+			Default = 30,
+			Min = 0,
+			Max = 180,
+			Tip = Text.GUI_ASET_ICIBT_TIP
+		},
+		lockedCamera = {
+			Default = false,
+			Tip = Text.GUI_ASET_LC_TIP
+		},
+		slopeAdjustement = {
+			Default = true,
+			Tip = Text.GUI_ASET_SA_TIP
+		},
+		slopeCorrectionInAirDampFactor = {
+			Default = 0.1,
+			Min = 0,
+			Max = 1,
+			Step = 0.01,
+			Tip = Text.GUI_ASET_SCIADF_TIP
+		},
+		slopeCorrectionInAirFallCoef = {
+			Default = 2,
+			Min = 0,
+			Max = 5,
+			Tip = Text.GUI_ASET_SCIAFC_TIP
+		},
+		slopeCorrectionInAirPitchMax = {
+			Default = 30,
+			Min = 0,
+			Max = 90,
+			Tip = Text.GUI_ASET_SCIAPX_TIP
+		},
+		slopeCorrectionInAirPitchMin = {
+			Default = -30,
+			Min = -90,
+			Max = 0,
+			Tip = Text.GUI_ASET_SCIAPN_TIP
+		},
+		slopeCorrectionInAirRaiseCoef = {
+			Default = 0.5,
+			Min = 0,
+			Max = 2,
+			Step = 0.01,
+			Tip = Text.GUI_ASET_SCIARC_TIP
+		},
+		slopeCorrectionInAirSpeedMax = {
+			Default = 10,
+			Min = 0,
+			Max = 100,
+			Tip = Text.GUI_ASET_SCIASX_TIP
+		},
+		slopeCorrectionInAirStrength = {
+			Default = 20,
+			Min = 0,
+			Max = 50,
+			Tip = Text.GUI_ASET_SCIAS_TIP
+		},
+		slopeCorrectionOnGroundPitchMax = {
+			Default = 30,
+			Min = 0,
+			Max = 90,
+			Tip = Text.GUI_ASET_SCOGPX_TIP
+		},
+		slopeCorrectionOnGroundPitchMin = {
+			Default = -30,
+			Min = -90,
+			Max = 0,
+			Tip = Text.GUI_ASET_SCOGPN_TIP
+		},
+		slopeCorrectionOnGroundStrength = {
+			Default = 4,
+			Min = 0,
+			Max = 10,
+			Tip = Text.GUI_ASET_SCOGS_TIP
+		}
 	}
 }
 
@@ -687,7 +887,17 @@ local editor = {
 	lastBundle = nil,
 
 	---Determines whether overwriting the preset file is allowed.
-	isOverwriteConfirmed = false
+	isOverwriteConfirmed = false,
+}
+
+---Container for optional addon data.
+---@type table<string, any>
+local addons = {
+	---Holds a lookup table of crowd vehicles if the addon is available.
+	---Each key is the vehicle name and the value is always `true`.
+	---Set to `false` if the addon is not installed.
+	---@type table<string, boolean>|boolean
+	crowdLookup = nil
 }
 
 ---Tracks state of the Preset Explorer UI.
@@ -972,7 +1182,7 @@ end
 ---@return boolean # True if `value` is within [min, max], otherwise false.
 local function inRange(value, min, max)
 	if not isNumber(value) then return false end
-	if not isNumber(min) then max = -math.huge end
+	if not isNumber(min) then min = -math.huge end
 	if not isNumber(max) then max = math.huge end
 	return value >= min and value <= max
 end
@@ -984,7 +1194,7 @@ end
 ---@return number # The clamped value within [min, max].
 local function clamp(value, min, max)
 	if not isNumber(value) then return 0 end
-	if not isNumber(min) then max = -math.huge end
+	if not isNumber(min) then min = -math.huge end
 	if not isNumber(max) then max = math.huge end
 	return math.min(math.max(value, min), max)
 end
@@ -992,7 +1202,7 @@ end
 ---Compares two values as alphanumeric strings.
 ---Strings are compared alphabetically, but numeric substrings are
 ---compared as numbers to ensure natural ordering.
----For example, "hello2" < "hello13".
+---For example, "foo2" < "foo13".
 ---@param a any # First value to compare
 ---@param b any # Second value to compare
 ---@return boolean # True if `a` should come before `b`, false otherwise
@@ -1071,13 +1281,13 @@ local function equals(a, b, visited)
 end
 
 ---Checks if a given value is equal to any of the provided comparison values.
----@param a any The value to compare.
+---@param x any The value to compare.
 ---@param ... any A variable number of values to compare against.
 ---@return boolean True if `a` equals at least one of the provided values, otherwise false.
-local function equalsAny(a, ...)
+local function equalsAny(x, ...)
 	for i = 1, select("#", ...) do
 		local v = select(i, ...)
-		if equals(a, v) then
+		if equals(x, v) then
 			return true
 		end
 	end
@@ -1088,7 +1298,7 @@ end
 ---For strings and numbers, it checks containment (prefix match for numbers, substring for strings).
 ---For tables, it distinguishes between arrays and key-value tables:
 --- - Arrays: checks if any value equals the target.
---- - Key-value tables: checks if the key equals the target, or the value contains the target.
+--- - Key-value tables: checks if the key equals the target.
 ---@param x any The container value (string, number, or table).
 ---@param v any The value to search for.
 ---@return boolean # True if the value is found, false otherwise.
@@ -1122,8 +1332,8 @@ local function contains(x, v)
 		return false
 	end
 
-	for k, e in pairs(x) do
-		if equals(k, v) or contains(e, v) then
+	for k, _ in pairs(x) do
+		if equals(k, v) then
 			return true
 		end
 	end
@@ -1172,7 +1382,6 @@ end
 ---@param s string # The value to check, typically a string representing a filename.
 ---@return boolean # True if the filename ends with `.lua`, otherwise false.
 local function hasLuaExt(s)
-	if not s then return false end
 	return endsWith(s, ".lua", true)
 end
 
@@ -1180,17 +1389,15 @@ end
 ---@param s string # The input value to be converted to a Lua file name.
 ---@return string # The file name with `.lua` extension, or an empty string if the input is nil.
 local function ensureLuaExt(s)
-	if not s then return "" end
-	s = tostring(s)
+	if not isStringValid(s) then return "" end
 	return hasLuaExt(s) and s or s .. ".lua"
 end
 
 ---Removes the `.lua` extension from a filename if present.
----@param s string? # The filename to process.
+---@param s string # The filename to process.
 ---@return string # The filename without `.lua` extension, or the original string if no `.lua` extension is found.
 local function trimLuaExt(s)
-	if not s then return "" end
-	s = tostring(s)
+	if not isStringValid(s) then return "" end
 	return hasLuaExt(s) and s:sub(1, -5) or s
 end
 
@@ -1200,7 +1407,7 @@ end
 ---@return string # The truncated string with "..." in the middle if needed.
 local function truncateMiddle(s, length)
 	if not isStringValid(s) then return "" end
-	if #s <= length then return s end
+	if not isNumber(length) or length < 6 or #s <= length then return s end
 	local half = floor((length - 3) / 2)
 	return s:sub(1, half) .. "..." .. s:sub(#s - half + 1)
 end
@@ -1218,7 +1425,7 @@ end
 ---Converts a camelCase string into a human-readable title.
 ---@param s string # The camelCase string to convert.
 ---@return string # A title-cased string with spaces inserted before uppercase letters.
-local function camelToTitle(s)
+local function camelToHuman(s)
 	if not isStringValid(s) then return "" end
 	s = s:gsub("(%l)(%u)", "%1 %2")
 	s = s:gsub("^%l", string.upper)
@@ -1269,7 +1476,7 @@ end
 ---Returns a shortened version of the input string by removing a number of trailing underscore-separated parts.
 ---The number of parts removed depends on how many underscores are in the string.
 ---@param s string # The input string (e.g., "v_sport2_porsche_911turbo_player").
----@return string # The shortened string (e.g., "v_sport2_porsche").
+---@return string # The shortened string (e.g., "v_sport2_porsche_911turbo").
 local function chopUnderscoreParts(s)
 	if not isStringValid(s) then return "" end
 	local t = {}
@@ -1299,14 +1506,14 @@ end
 local function opairs(t, ...)
 	t = isTable(t) and t or {}
 	local sortKeys = { ... }
-	local ks = {}
+	local sorted = {}
 
 	for k in pairs(t) do
-		insert(ks, k)
+		insert(sorted, k)
 	end
 
 	if #sortKeys > 0 then
-		sort(ks, function(a, b)
+		sort(sorted, function(a, b)
 			local va, vb = t[a], t[b]
 
 			for _, field in ipairs(sortKeys) do
@@ -1320,13 +1527,13 @@ local function opairs(t, ...)
 			return alphaNumericCompare(a, b)
 		end)
 	else
-		sort(ks, alphaNumericCompare)
+		sort(sorted, alphaNumericCompare)
 	end
 
 	local i = 0
 	return function()
 		i = i + 1
-		local k = ks[i]
+		local k = sorted[i]
 		if k ~= nil then
 			return k, t[k]
 		end
@@ -1414,9 +1621,9 @@ local function pick(i, ...)
 end
 
 ---Returns the i-th element of a table or the value itself if it's not a table.
----@param x any # A table or any other value
----@param i integer # Index to access if values is a table
----@return any # The element at index i if values is a table, otherwise values itself
+---@param x any # A table or any other value.
+---@param i integer # Index to access if values is a table.
+---@return any # The element at index i if values is a table, otherwise values itself.
 local function pluck(x, i)
 	return isTable(x) and x[i] or x
 end
@@ -1513,7 +1720,6 @@ local function deserialize(x, isFile)
 	end
 
 	local str = x:match("^%s*return") and x or "return " .. x
-	---@diagnostic disable-next-line
 	local ok, result = pcall(loadstring, str)
 	return ok and result or nil
 end
@@ -1630,8 +1836,9 @@ end
 ---Retrieves the current game version `string` or a parsed `IVersion` table.
 ---@return IVersion # Parsed version object if `asString` is false/nil, otherwise the version string.
 local function getGameVersion()
-	local raw = Game.GetSystemRequestsHandler():GetGameVersion()
-	local ver = parseVersion(raw)
+	local sys = Game.GetSystemRequestsHandler()
+	local str = sys and sys:GetGameVersion()
+	local ver = parseVersion(str)
 	if ver.Minor < 10 then
 		ver.Minor = ver.Minor * 10
 	end
@@ -1642,19 +1849,6 @@ end
 ---@return IVersion # Parsed version object if `asString` is false/nil, otherwise the version string.
 local function getRuntimeVersion()
 	return parseVersion(GetVersion())
-end
-
----Extracts the name from a TweakDBID record.
----@param data TDBID # The TweakDBID record to be parsed.
----@return string? # The extracted name, or nil if not found.
-local function getRecordName(data)
-	if not data then return nil end
-
-	local ok, result = pcall(TDBID.ToStringDEBUG, data)
-	if ok then return isStringValid(result) and result or nil end
-
-	local str = (tostring(data):match("%-%-%[%[(.-)%-%-%]%]") or ""):match("^%s*(.-)%s*$")
-	return isStringValid(str) and str or nil
 end
 
 ---Initializes a table in the database.
@@ -1996,6 +2190,14 @@ local function getUserSettingsOption(group, option, fresh)
 	return result
 end
 
+---Retrieves the current third-person vehicle camera height setting from the settings system.
+---@return string? # The current value of the third-person vehicle camera height setting, or nil if not found.
+local function getUserSettingsCameraHeight()
+	local settings = getUserSettingsOption("/controls/vehicle", "VehicleTPPCameraHeight", true)
+	---@cast settings table<string, string>
+	return isTableValid(settings) and settings.Value or nil
+end
+
 --#endregion
 
 --#region 🚗 Vehicle Metadata
@@ -2026,12 +2228,12 @@ local function findVehicleName(tid)
 	local cache = getCache(0xaad0) or {}
 	if cache[hash] then return cache[hash] end
 
-	local result = getRecordName(tid)
+	local result = TDBID.ToStringDEBUG(tid)
 	if not result then
 		local vehicles = getPlayerVehicles()
 		for _, v in ipairs(vehicles) do
 			if v.hash == hash then
-				result = getRecordName(v)
+				result = TDBID.ToStringDEBUG(v)
 				break
 			end
 		end
@@ -2044,8 +2246,11 @@ local function findVehicleName(tid)
 end
 
 ---Retrieves all appearance entries for a given vehicle name.
----@param name string # The name of the vehicle.
----@return VehicleAppearance[]? # A table of appearance entries if found, or nil if the name is invalid or the resource cannot be loaded.
+---Note: On the first call after starting a new CET session, the returned data may be nil.
+---This appears to be caused by delayed (lazy) loading of vehicle appearance data or a CET-related issue.
+---It is essential to verify the returned data to ensure all expected appearances have been successfully loaded.
+---@param name string # The vehicle name identifier.
+---@return VehicleAppearance[]? # A list of appearance entries if available, which may initially be incomplete or empty if the data is not yet fully loaded.
 local function getVehicleApperances(name)
 	if not isStringValid(name) then
 		logIf(DevLevels.FULL, LogLevels.ERROR, 0x8d0c, Text.LOG_ARG_INVALID)
@@ -2069,9 +2274,12 @@ local function getVehicleApperances(name)
 end
 
 ---Builds a map of all unique player vehicle and appearance names. Optionally skips vanilla vehicles.
+---Note: On the first call in a new CET session, the returned data is often incomplete.
+---This behavior appears to be related to delayed (lazy) loading of vehicle appearances or an internal CET quirk.
+---It may be necessary to call this function repeatedly across several frames until all expected entries are present.
 ---@param customOnly boolean # If true, only custom vehicles will be included.
 ---@return table? # A table where keys are vehicle or appearance identifiers and values are true. Returns nil if no vehicles are found.
----@return number # Number of entries in the returned table, or -1 if no vehicles are found.
+---@return number # The total number of collected identifiers. Can be used to detect when all entries have been loaded.
 local function getAllUniqueVehicleIdentifiers(customOnly)
 	local vehicles = getPlayerVehicles()
 	if nilOrEmpty(vehicles) then
@@ -2089,7 +2297,7 @@ local function getAllUniqueVehicleIdentifiers(customOnly)
 	local result = {}
 	local amount = 0
 	for i = start, length do
-		local name = getRecordName(vehicles[i])
+		local name = TDBID.ToStringDEBUG(vehicles[i])
 		name = name and name:gsub("^Vehicle%.", "")
 		if not name or result[name] then goto continue end
 
@@ -2112,7 +2320,6 @@ local function getAllUniqueVehicleIdentifiers(customOnly)
 
 		::continue::
 	end
-
 	return result, amount
 end
 
@@ -2143,7 +2350,7 @@ end
 ---@return integer # Vehicle status code:
 --- - -1: No valid vehicle found (missing TDBID)
 --- - 0: Crowd vehicle (vanilla, but not part of the player vehicle list)
---- - 1: Player vanilla vehicle (index <= 105, or <= 85 on game version <= 2.20)
+--- - 1: Player vanilla vehicle (index <= 105, or <= 85 on game version <= 2.21)
 --- - 2: Custom/modded vehicle (index above threshold)
 local function getVehicleStatus()
 	local cache = getCache(0xddf2)
@@ -2155,10 +2362,38 @@ local function getVehicleStatus()
 	if tid then
 		for i, v in ipairs(getPlayerVehicles()) do
 			if v.hash == tid.hash then
+				--Workaround for mods that add vanilla crowd vehicles to the player's list,
+				--causing them to be detected as mods — now resolved through an external
+				--optional lookup addon that only loads on demand.
+				local lookup = addons.crowdLookup
+				if lookup == nil then
+					local path = "addons/crowd_lookup.lua"
+					if fileExists(path) then
+						local chunk = deserialize(path, true)
+						if chunk then
+							local ok, result = pcall(chunk)
+							if ok and isTableValid(result) then
+								lookup = result
+							end
+						end
+					end
+					addons.crowdLookup = lookup or false
+				end
+				if lookup then ---@cast lookup table<string, boolean>
+					local str = findVehicleName(tid)
+					if str and lookup[str] then
+						r = 0
+						break
+					end
+				end
+
+				--Decide whether it's a vanilla player or a custom player vehicle.
 				r = i <= getVanillaVehicleCount() and 1 or 2
 				break
 			end
 		end
+
+		--Everything else is considered a vanilla crowd vehicle.
 		r = r > 0 and r or 0
 	end
 
@@ -2190,7 +2425,7 @@ local function getVehicleCameraKeys()
 
 	local list = {}
 	for _, v in ipairs(record) do
-		local name = getRecordName(v)
+		local name = TDBID.ToStringDEBUG(v)
 		if not name then goto continue end
 
 		insert(list, name)
@@ -2305,9 +2540,9 @@ local function getVehicleCameraMap()
 	local map = {}
 	for _, v in pairs(keys) do
 		local height = TweakDB:GetFlat(v .. ".height")
-		local heightName = height and getRecordName(height)
+		local heightName = height and Game.NameToString(height)
 		local distance = heightName and TweakDB:GetFlat(v .. ".distance")
-		local distanceName = distance and getRecordName(distance)
+		local distanceName = distance and Game.NameToString(distance)
 		if not distanceName then goto continue end
 
 		--Workaround for mislabeled Low/High YAML tweaks.
@@ -2632,9 +2867,9 @@ local function resetCustomDefaultParams(key)
 
 	local veh = getMountedVehicle()
 	local vtid = veh and veh:GetTDBID()
-	local vname = vtid and getRecordName(vtid)
+	local vname = vtid and TDBID.ToStringDEBUG(vtid)
 	local cptid = vname and TweakDB:GetFlat(vname .. ".tppCameraParams")
-	local section = cptid and getRecordName(cptid)
+	local section = cptid and TDBID.ToStringDEBUG(cptid)
 	if not section then return end
 
 	local sIdx = contains(section, "_2w_") and 2 or 1
@@ -2931,7 +3166,7 @@ end
 local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey)
 	if not areString(vehicleName, appearanceName) then return currentKey end
 	if not isString(currentKey) then return vehicleName end
-	if not isString(newKey) then return currentKey end
+	if not isString(newKey) then return currentKey end ---@cast newKey string
 
 	local name = trimLuaExt(newKey)
 	if #name < 1 then
@@ -4341,6 +4576,9 @@ local function drawRuler(scale, maxWidth, maxHeight)
 	)
 	if not ImGui.Begin("VerticalScreenRuler", true, flags) then return end
 
+	local cache = getCache(0xd6ae, true) or {}
+	cache.isHigh = cache.isHigh ~= nil and cache.isHigh or equals(getUserSettingsCameraHeight(), "High")
+
 	local lineH = ImGui.GetTextLineHeight() * 0.2
 	local posX, posY = ImGui.GetCursorPos()
 	local fov = get(config.options.fov, 69, "Value")
@@ -4348,10 +4586,10 @@ local function drawRuler(scale, maxWidth, maxHeight)
 	local ticks = fov > 69 and fov or 62
 
 	local indices = (function()
-		if not equals(zoom, 1.00) then return end
+		if not cache.isHigh or not equals(zoom, 1.00) then return end
 
 		--Known positions.
-		local map = {
+		local map = cache.markPosMap or {
 			[69]  = { -1, 10, 60, 61, 62 },
 			[75]  = { -1, 25, 69, 70, 71 },
 			[80]  = { -1, 35, 76, 77, 78 },
@@ -4362,6 +4600,7 @@ local function drawRuler(scale, maxWidth, maxHeight)
 			[105] = { 53, 76, 101, 102, 103 },
 			[110] = { 61, 82, 105, 106, 107 }
 		}
+		cache.markPosMap = map
 
 		if map[fov] then return map[fov] end
 
@@ -4369,6 +4608,7 @@ local function drawRuler(scale, maxWidth, maxHeight)
 		local keys = {}
 		for k in pairs(map) do insert(keys, k) end
 		sort(keys, function(a, b) return a < b end)
+
 		local p, n
 		for i = 1, #keys do
 			if keys[i] <= fov then p = keys[i] end
@@ -4376,17 +4616,20 @@ local function drawRuler(scale, maxWidth, maxHeight)
 		end
 		p = p or n
 		n = n or p
+
 		local t = (fov - p) / (n - p)
 		local r = {}
 		for i = 1, 5 do
 			r[i] = (map[p][i] == -1 or map[n][i] == -1) and -1 or floor(map[p][i] + (map[n][i] - map[p][i]) * t + 0.5)
 		end
+
+		cache.markPosMap[fov] = r
 		return r
 	end)()
 
 	local colors = {}
 	if isTableValid(indices) then ---@cast indices table
-		local codes = {
+		cache.colors = cache.colors or {
 			Colors.GREEN,
 			Colors.CYAN,
 			Colors.YELLOW,
@@ -4395,15 +4638,22 @@ local function drawRuler(scale, maxWidth, maxHeight)
 		}
 		for i, idx in ipairs(indices) do
 			if idx > 0 then
-				colors[idx] = codes[i]
+				colors[idx] = cache.colors[i]
 			end
 		end
 	end
 
+	cache.reps = cache.reps or {}
+	cache.nums = cache.nums or {}
 	for i = 0, ticks do
 		local isMajor = i % 10 == 0
-		local tick = rep("_", isMajor and 5 or i % 5 == 0 and 4 or 3)
-		local num = isMajor and format(" %3d", i) or ""
+
+		local tick = cache.reps[i] or rep("_", isMajor and 5 or i % 5 == 0 and 4 or 3)
+		cache.reps[i] = tick
+
+		local num = cache.nums[i] and cache.nums[i] or (isMajor and format(" %3d", i) or "")
+		cache.nums[i] = num
+
 		local px, py = posX, posY + (ticks - i) * lineH
 		local color = colors[i]
 
@@ -4427,6 +4677,8 @@ local function drawRuler(scale, maxWidth, maxHeight)
 
 	ImGui.PopStyleColor()
 	ImGui.End()
+
+	setCache(0xd6ae, cache, true)
 end
 
 ---Draws and manages the Global Settings window.
@@ -4628,7 +4880,7 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 					if config.options[var] then goto continue end
 
 					ImGui.TableNextColumn()
-					local text = camelToTitle(var)
+					local text = camelToHuman(var)
 					ImGui.Text(text)
 					addTooltip(scale, data.Tip)
 
@@ -5117,11 +5369,11 @@ registerForEvent("onInit", function()
 	--Load all saved data from disk; apply preset only if the player is in a vehicle.
 	onInit()
 
-	--Calibrate FOV limits from user settings.
+	--Set FOV limits from user settings.
 	local settings = getUserSettingsOption("/graphics/basic", "FieldOfView")
 	if isTableValid(settings) then
 		local fov = config.options.fov
-		fov.Min = math.max(fov.Min, settings.MinValue / 3.5)
+		fov.Min = math.max(fov.Min, floor(settings.MinValue / 3.5))
 		fov.Max = math.min(fov.Max, settings.MaxValue + 10)
 	end
 
@@ -5181,26 +5433,29 @@ registerForEvent("onInit", function()
 	end)
 
 	--When control over the player character is gained (e.g. after loading a save).
-	Observe("PlayerPuppet", "OnTakeControl", function(player)
-		if not state.isModEnabled or gui.isOverlayLocked or player:GetEntityID().hash ~= 1ULL then return end
+	Observe("PlayerPuppet", "OnTakeControl", function(self)
+		if not state.isModEnabled or gui.isOverlayLocked then return end
+
+		local hash = tonumber(self:GetEntityID().hash)
+		if hash ~= 1 then return end
 
 		onUnmount(true)
 
-		local deadline = 20
+		local deadline = 18 --Prevents an infinite loop, even though it's very unlikely.
 		asyncRepeat(0.3, function(id)
 			if not state.isModEnabled then
 				asyncStop(id)
 				return
 			end
 
-			asyncStop(id)
+			if not Game.GetPlayer() then return end --Outdated CET.
 
-			if not Game.GetPlayer() then return end
 			if deadline > 0 and not isVehicleMounted() then
 				deadline = deadline - 1
 				return
 			end
 
+			asyncStop(id)
 			applyPreset()
 		end)
 	end)
@@ -5387,7 +5642,7 @@ registerForEvent("onInit", function()
 					saveToFile(1)
 				end
 
-				local label = truncateMiddle(camelToTitle(var), 48)
+				local label = truncateMiddle(camelToHuman(var), 48)
 				local defText
 				if isBoolean(default) then
 					defText = default and Text.GUI_ON or Text.GUI_OFF
@@ -5555,7 +5810,7 @@ registerForEvent("onDraw", function()
 
 	--Create top controls only if CET is open.
 	if not isStillVisible then
-		--Warning for outdated versions.
+		--Warning for outdated game or runtime.
 		if state.devMode <= DevLevels.DISABLED and (not state.isGameCompatible or not state.isCetCompatible) then
 			local gameVer, cetVer = serialize(state.gameVersion), serialize(state.cetVersion)
 			ImGui.Dummy(0, 0)
@@ -5735,8 +5990,7 @@ registerForEvent("onDraw", function()
 		function()
 			camHeight = cache.camHeight
 			if isString(camHeight) then return camHeight end
-			local settings = getUserSettingsOption("/controls/vehicle", "VehicleTPPCameraHeight", true)
-			local height = isTableValid(settings) and settings.Value
+			local height = getUserSettingsCameraHeight()
 			camHeight = equals(height, "Low") and Text.GUI_TBL_VAL_CAMH_0 or Text.GUI_TBL_VAL_CAMH_1
 			cache.camHeight = camHeight
 			setCache(0xcb3d, cache)
@@ -5751,13 +6005,13 @@ registerForEvent("onDraw", function()
 		end,
 		function()
 			local text = ({
-				[0] = Text.GUI_TBL_VAL_CAMA__0,
-				[1] = Text.GUI_TBL_VAL_CAMA__1,
-				[2] = Text.GUI_TBL_VAL_CAMA__2,
-				[3] = Text.GUI_TBL_VAL_CAMA__3,
-				[4] = Text.GUI_TBL_VAL_CAMA__4,
-				[5] = Text.GUI_TBL_VAL_CAMA__5,
-				[6] = Text.GUI_TBL_VAL_CAMA__6,
+				[0] = Text.GUI_TBL_VAL_CAMA_0,
+				[1] = Text.GUI_TBL_VAL_CAMA_1,
+				[2] = Text.GUI_TBL_VAL_CAMA_2,
+				[3] = Text.GUI_TBL_VAL_CAMA_3,
+				[4] = Text.GUI_TBL_VAL_CAMA_4,
+				[5] = Text.GUI_TBL_VAL_CAMA_5,
+				[6] = Text.GUI_TBL_VAL_CAMA_6,
 			})[activeCam] or Text.GUI_UNKNOWN
 			activeCamText = activeCam == 0 and text or format(text, camHeight)
 			return activeCamText
@@ -5789,7 +6043,7 @@ registerForEvent("onDraw", function()
 			addText(text, color, halfHeightPadding, contentWidth, itemSpacing)
 		end
 
-		--Create Preset Explorer button only if CET is open.
+		--Don't create a Preset Explorer button if CET isn't open.
 		if isStillVisible then
 			popColors(pushedColors)
 			ImGui.End()
@@ -5858,21 +6112,21 @@ registerForEvent("onDraw", function()
 		ImGui.TableHeadersRow()
 
 		local equNames = name == appName
-		local idAndHeight = format("%s : %s", id, activeCamText)
 		local customID = getCustomVehicleCameraID()
-		local cIdAndHeight = isStringValid(customID) and format("%s : %s", customID, activeCamText)
+		local customIdText = isStringValid(customID) and format("%s : %s", customID, activeCamText) or nil
+		local baseIdText = customIdText ~= nil and id or format("%s : %s", id, activeCamText)
 		local rows = {
 			{ label = "\u{f0208}", tip = Text.GUI_TBL_LABL_DNAME_TIP,  value = displayName },
 			{ label = "\u{f1975}", tip = Text.GUI_TBL_LABL_STATUS_TIP, value = statusText },
 			{ label = "\u{f1b8d}", tip = Text.GUI_TBL_LABL_VEH_TIP,    value = name },
-			{ label = "\u{f0301}", tip = Text.GUI_TBL_LABL_APP_TIP,    value = appName,     isDisabled = equNames },
-			{ label = "\u{f0567}", tip = Text.GUI_TBL_LABL_CAMID_TIP,  value = idAndHeight, isDisabled = id == customID },
+			{ label = "\u{f0301}", tip = Text.GUI_TBL_LABL_APP_TIP,    value = appName,    isDisabled = equNames },
+			{ label = "\u{f0567}", tip = Text.GUI_TBL_LABL_CAMID_TIP,  value = baseIdText, isDisabled = id == customID },
 			{
 				label      = "\u{f0569}",
 				tip        = Text.GUI_TBL_LABL_CCAMID_TIP,
-				value      = cIdAndHeight,
+				value      = customIdText,
 				valTip     = Text.GUI_TBL_VAL_CCID_TIP,
-				isCustomID = cIdAndHeight ~= nil
+				isCustomID = customIdText ~= nil
 			},
 			{
 				label      = "\u{f1668}",
