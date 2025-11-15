@@ -8,7 +8,8 @@ Third-Person Vehicle Camera Tool
 Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
-Version: 2025-08-29, 18:36 UTC+01:00 (MEZ)
+Filename: text.lua
+Version: 2025-09-01, 12:27 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -42,8 +43,6 @@ return {
 	GUI_REST_TIP = "Removes the \"presets/%s.lua\" to revert to the default preset.\n\nYou must exit and re-enter the vehicle for the changes to take effect",
 	GUI_OVWR_CONFIRM = "Replace existing file \"presets/%s.lua\"?",
 	GUI_OPEN_GOPT = "\u{F1064} Global Parameters ",
-	GUI_GOPT_FOV = "Field Of View",
-	GUI_GOPT_NAC = "No Auto-Centering",
 	GUI_OPEN_FMAN = "\u{f12e3} Preset File Manager ",
 
 	--GUI: 📋 Table Label Tooltips
@@ -64,6 +63,11 @@ return {
 	GUI_TBL_VAL_X_TIP = "\u{f0d4c} X-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Left|Increase:|Right",
 	GUI_TBL_VAL_Y_TIP = "\u{f0d51} Y-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Farther|Increase:|Closer",
 	GUI_TBL_VAL_Z_TIP = "\u{f0d55} Z-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Down|Increase:|Up",
+
+	--GUI: ⚙️ Global Options
+	GUI_GOPT_FOV = "Field Of View",
+	GUI_GOPT_NAC = "No Auto-Centering",
+	GUI_GOPT_TIP = "Keep in mind that changes only take effect after exiting and re-entering the vehicle.\n\nFor certain vehicles, you may also need to disable and re-enable the mod via the checkbox to apply your changes.",
 
 	--GUI: 🗂️ Preset File Manager
 	GUI_FMAN_TITLE = "Preset File Manager",

@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-08-29, 18:37 UTC+01:00 (MEZ)
+Version: 2025-09-02, 14:17 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -2905,8 +2905,8 @@ local function openGlobalOptionsWindow(scale, contentWidth, controlPadding, heig
 		return
 	end
 
-	ImGui.TableSetupColumn("Parameter", ImGuiTableColumnFlags.WidthStretch)
-	ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthFixed)
+	ImGui.TableSetupColumn(" \u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
+	ImGui.TableSetupColumn(" \u{f1b91}", ImGuiTableColumnFlags.WidthFixed)
 	ImGui.TableHeadersRow()
 
 	for key, data in pairs(global_params) do
@@ -2936,6 +2936,8 @@ local function openGlobalOptionsWindow(scale, contentWidth, controlPadding, heig
 		else
 			ImGui.Text(tostring(data.Value))
 		end
+
+		addTooltip(scale, Text.GUI_GOPT_TIP)
 	end
 
 	ImGui.EndTable()
@@ -2947,6 +2949,8 @@ local function openGlobalOptionsWindow(scale, contentWidth, controlPadding, heig
 			data.Value = data.Default
 		end
 	end
+
+	addTooltip(scale, Text.GUI_GOPT_TIP)
 
 	ImGui.End()
 end
