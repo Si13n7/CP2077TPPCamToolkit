@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-04-15, 12:32 UTC+01:00 (MEZ)
+Version: 2025-04-16, 10:00 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -36,9 +36,9 @@ return {
 	GUI_APPLY = "Apply Changes",
 	GUI_APPLY_TIP = "Applies the configured values without saving them permanently.\n\nThe vehicle must be exited and re-entered for the changes to become active.",
 	GUI_SAVE = "Save Changes Permanently",
-	GUI_SAVE_TIP = "Applies the configured values and saves them permanently to \"./presets/%s.lua\".\n\nChanges will only take effect after exiting and re-entering the vehicle.",
-	GUI_REST_TIP = "Removes the \"./presets/%s.lua\" to revert to the default preset.\n\nYou must exit and re-enter the vehicle for the changes to take effect",
-	GUI_OVWR_CONFIRM = "Replace existing file \"./presets/%s.lua\"?",
+	GUI_SAVE_TIP = "Applies the configured values and saves them permanently to \"presets/%s.lua\".\n\nChanges will only take effect after exiting and re-entering the vehicle.",
+	GUI_REST_TIP = "Removes the \"presets/%s.lua\" to revert to the default preset.\n\nYou must exit and re-enter the vehicle for the changes to take effect",
+	GUI_OVWR_CONFIRM = "Replace existing file \"presets/%s.lua\"?",
 	GUI_OPEN_FMAN = "Open Preset File Manager",
 
 	--GUI: Table Headers
@@ -77,10 +77,10 @@ return {
 	LOG_CAM_OSET_DONE = "Camera offset '%s' is complete.",
 	LOG_FOUND_DEF = "Default preset '%s' found.",
 	LOG_LINK_PSET = "Following linked preset (%d): '%s'",
-	LOG_LOAD_PSET = "Preset '%s' has been loaded from './%s/%s'.",
+	LOG_LOAD_PSET = "Preset '%s' has been loaded from '%s/%s'.",
 	LOG_MOD_OFF = "Mod has been disabled!",
 	LOG_MOD_ON = "Mod has been enabled!",
-	LOG_PSET_SAVED = "File './presets/%s.lua' was saved successfully.",
+	LOG_PSET_SAVED = "File 'presets/%s.lua' was saved successfully.",
 	LOG_PSET_UPD = "The preset '%s' has been updated.",
 	LOG_PSETS_RLD = "Presets have been reloaded.",
 	LOG_REST_ALL = "Restored all default presets.",
@@ -91,21 +91,21 @@ return {
 	--LOG: Warnings
 	LOG_BLANK_NAME = "The new preset name cannot be blank.",
 	LOG_CLEAR_PSETS = "Cleared all loaded camera offset presets.",
-	LOG_FILE_EXIST = "File './%s' already exists, and overwrite is disabled.",
+	LOG_FILE_EXIST = "File '%s' already exists, and overwrite is disabled.",
 	LOG_NO_PSET_FOUND = "No preset found.",
 	LOG_NAMES_MISM = "The new preset name must be '%s', '%s', or a prefix of one of them; otherwise, it will not be applied and will be ignored.",
 	LOG_NAME_MISM = "The new preset name must be '%s' or a prefix of it; otherwise, it will not be applied and will be ignored.",
 	LOG_PSET_NOT_CHANGED = "No changes were made to preset '%s' compared to the default preset '%s'.",
-	LOG_PSET_NOT_SAVED = "File './presets/%s.lua' could not be saved.",
-	LOG_SKIP_PSET = "Skipping already loaded preset: '%s' ('./%s/%s').",
+	LOG_PSET_NOT_SAVED = "File 'presets/%s.lua' could not be saved.",
+	LOG_SKIP_PSET = "Skipping already loaded preset: '%s' ('%s/%s').",
 
 	--LOG: Errors
-	LOG_DIR_NOT_EXIST = "You cannot delete the entire directory under './%s'.",
+	LOG_DIR_NOT_EXIST = "You cannot delete the entire directory under '%s'.",
 	LOG_DEFS_INCOMP = "The default presets are incomplete.",
 	LOG_NO_CAM_OSET = "Could not retrieve camera offset: '%s'.",
 	LOG_FAIL_APPLY = "Failed to apply preset.",
-	LOG_FAIL_LOAD = "Failed to load preset './%s/%s': %s",
-	LOG_BAD_PSET = "Invalid or failed preset './%s/%s'.",
+	LOG_FAIL_LOAD = "Failed to load preset '%s/%s': %s",
+	LOG_BAD_PSET = "Invalid or failed preset '%s/%s'.",
 	LOG_MISS_DEF = "Default preset '%s' could not be found.",
 	LOG_NO_DEF_PSET = "Default preset '%s' for '%s' not found.",
 	LOG_NO_PSET_FOR_LVL = "No preset provided for level '%s'.",
