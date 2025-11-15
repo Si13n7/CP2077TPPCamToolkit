@@ -1,1 +1,1 @@
-return{ID="v_utility4_militech_behemoth_Preset",Close={a=12,x=0,y=2.5,z=3.25,d=0},Medium={a=12,x=0,y=2.5,z=3.5,d=1.5},Far={a=12,x=0,y=2.5,z=3.75,d=4},IsDefault=true}
+return{ID="v_utility4_militech_behemoth_Preset",Close={a=12,x=0,y=2.5,z=3.25,d=0},Medium={a=12,x=0,y=2.5,z=3.5,d=2},Far={a=12,x=0,y=2.5,z=3.75,d=4},IsDefault=true}

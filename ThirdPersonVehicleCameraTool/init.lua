@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-09-02, 14:17 UTC+01:00 (MEZ)
+Version: 2025-09-02, 18:45 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -285,6 +285,11 @@ local overlay_open = false
 ---e.g., during loading sequences or pending asynchronous operations.
 ---@type boolean
 local overlay_locked = false
+
+---Forces a one–frame skip in onDraw after certain events (e.g. onUnmount).
+---Used to ensure getMetrics() is executed once, then discarded,
+---so the next frame can rebuild the window with a clean width.
+local metrics_reset = false
 
 ---Current horizontal padding value used for centering UI elements.
 ---Dynamically adjusted based on available window width.
@@ -2558,15 +2563,17 @@ local function getMetrics()
 
 	local st = ImGui.GetStyle()
 	local sp = st.ItemSpacing.x
-	local hf = w * 0.5
-	hf = min(hf, ceil(abs(hf - (sp * 0.5))))
 
 	local h = ImGui.GetFontSize()
 	local s = h / 18
 
-	if padding_width == 0 then
+	if metrics_reset then
 		w = 230 * s
 	end
+
+	local hf = w * 0.5
+	hf = min(hf, ceil(abs(hf - (sp * 0.5))))
+
 	if padding_locked then
 		return w, hf, sp, s, padding_width
 	end
@@ -3189,7 +3196,7 @@ local function onUnmount(force)
 		log(LogLevels.INFO, 0x9dee, Text.LOG_EVNT_UMNT)
 	end
 
-	padding_width = 0
+	metrics_reset = true
 
 	vehicle_cache = {}
 	restoreModifiedPresets()
@@ -3412,6 +3419,13 @@ registerForEvent("onDraw", function()
 	local heightPadding = floor(4 * scale)
 	local halfHeightPadding = floor(2 * scale)
 	local doubleHeightPadding = floor(8 * scale)
+
+	--Forces ImGui to rebuild the window on the next frame with fresh metrics.
+	if metrics_reset then
+		metrics_reset = false
+		ImGui.End()
+		return
+	end
 
 	--Minimum window width and height padding.
 	ImGui.Dummy(baseContentWidth, heightPadding)
@@ -3652,8 +3666,8 @@ registerForEvent("onDraw", function()
 					addTooltip(nil, list)
 				end
 			elseif row.editable then
-				local namWidth = ImGui.CalcTextSize(name)
-				local appWidth = ImGui.CalcTextSize(appName)
+				local namWidth = min(ImGui.CalcTextSize(name), 302)
+				local appWidth = min(ImGui.CalcTextSize(appName), 302)
 				local maxWidth = max(namWidth, appWidth)
 				local width = min(maxWidth, maxInputWidth) + doubleHeightPadding
 				ImGui.PushItemWidth(width)
@@ -3699,7 +3713,22 @@ registerForEvent("onDraw", function()
 				))
 			else
 				alignNext(rowHeight)
-				ImGui.Text(tostring(row.value or Text.GUI_NONE))
+
+				local rawValue = tostring(row.value or Text.GUI_NONE)
+				local value = rawValue
+				local maxWidth = 290
+
+				if ImGui.CalcTextSize(value) > maxWidth then
+					repeat
+						value = value:sub(1, -2)
+					until ImGui.CalcTextSize(value) <= maxWidth
+					value = value .. "..."
+				end
+
+				ImGui.Text(value)
+				if rawValue ~= value then
+					addTooltip(scale, rawValue)
+				end
 				addTooltip(scale, row.valTip)
 			end
 
