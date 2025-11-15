@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-05-05, 15:05 UTC+01:00 (MEZ)
+Version: 2025-05-07, 00:45 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -31,7 +31,7 @@ return {
 	GUI_RLD_ALL = "\u{f054d} Reload All Presets ",
 	GUI_RLD_ALL_TIP = "Reloads all data from custom preset files - only needed if files have been changed or added, or if you want to reset the last unsaved changes.\n\nKeep in mind that changes only take effect after exiting and re-entering the vehicle",
 	GUI_DMODE = "Developer Mode",
-	GUI_DMODE_TIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso adjusts the level of debug output:\n 0. Disabled\n 1. Print only\n 2. Print & Alert\n 3. Print, Alert & Log",
+	GUI_DMODE_TIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso adjusts the level of debug output:\n\u{f0b39}\u{f00a0} Disabled\n\u{f0b3a}\u{f018d} Print only\n\u{f0b3b}\u{f0d59} Print & Alert\n\u{f0b3c}\u{f1272} Print, Alert & Log",
 	GUI_NO_VEH = "\u{f02fd} Please enter a vehicle first!",
 	GUI_APPLY = "\u{f044f} Apply ",
 	GUI_APPLY_TIP = "Applies the configured values without saving them permanently.\n\nThe vehicle must be exited and re-entered for the changes to become active.",
@@ -65,7 +65,7 @@ return {
 	GUI_FMAN_NO_PSETS = "No presets have been created yet.",
 
 	--LOG: ℹ️ Info
-	LOG_CAM_OSET_DONE = "Camera offset '%s' is complete.",
+	LOG_CAM_OSET_DONE = "Camera offset '%s' is ready.",
 	LOG_CAM_PSET = "Camera preset: '%s'.",
 	LOG_DEL_EPSET = "Last editor preset has been removed.",
 	LOG_DEL_SUCCESS = "Deleted preset '%s'.",

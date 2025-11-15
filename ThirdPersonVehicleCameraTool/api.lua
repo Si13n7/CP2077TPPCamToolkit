@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-05-05, 15:06 UTC+01:00 (MEZ)
+Version: 2025-05-07, 00:45 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -58,6 +58,7 @@ ______________________________________________
 ---@field SetNextWindowPos fun(x: number, y: number) # Sets the position for the next window before calling ImGui.Begin().
 ---@field SetNextWindowSize fun(width: number, height: number) # Sets the size for the next window before calling ImGui.Begin().
 ---@field GetFontSize fun(): number # Returns the height in pixels of the currently used font. Useful for vertical alignment calculations.
+---@field GetCursorPosX fun(): number # Returns the current X-position of the cursor within the window. Can be used to place elements precisely.
 ---@field GetCursorPosY fun(): number # Returns the current Y-position of the cursor within the window. Can be used to place elements precisely.
 ---@field SetCursorPosX fun(x: number) # Sets the X-position of the cursor within the window. Useful for manual horizontal positioning of UI elements.
 ---@field SetCursorPosY fun(y: number) # Sets the Y-position of the cursor within the window. Use to manually position elements vertically.
@@ -82,6 +83,8 @@ ImGuiWindowFlags = ImGuiWindowFlags
 ---Flags to customize table behavior and appearance.
 ---@class ImGuiTableFlags
 ---@field Borders integer # Draws borders between cells.
+---@field NoBordersInBody integer # Removes all inner borders between rows and columns in the body of the table (excluding headers). Improves visual minimalism.
+---@field SizingFixedFit integer # Columns use fixed width and will not stretch. Useful when exact sizes are required (e.g., for alignment or layout consistency).
 ImGuiTableFlags = ImGuiTableFlags
 
 ---Flags to customize individual columns within a table.
@@ -105,6 +108,7 @@ ImGuiCol = ImGuiCol
 ---Represents the current ImGui style configuration, controlling layout, spacing, padding, rounding, and more.
 ---@class ImGuiStyle
 ---@field ItemSpacing { x: number, y: number } # Horizontal and vertical spacing between widgets.
+---@field FramePadding { x: number, y: number } # Padding within a framed widget like a button or input box. Affects internal spacing horizontally (x) and vertically (y).
 ImGuiStyle = ImGuiStyle
 
 ---Enumerates the available types of Toast notifications for ImGui popups.

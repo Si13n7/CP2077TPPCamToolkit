@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-05-05, 15:05 UTC+01:00 (MEZ)
+Version: 2025-05-07, 00:45 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -67,7 +67,8 @@ ______________________________________________
 ---@field Medium IOffsetData? # The offset data for medium camera view.
 ---@field Far IOffsetData? # The offset data for far camera view.
 ---@field Link string? # The name of another camera preset to link to (if applicable).
----@field IsDefault boolean? # Determines whether this camera preset is a vanilla one.
+---@field IsDefault boolean? # Determines whether this camera preset is a default one.
+---@field IsJoined boolean? # Determines whether this camera preset was newly generated as a default.
 
 ---Represents a single camera preset entry used in the editor, including its metadata and file state.
 ---@class IEditorPreset
@@ -260,6 +261,10 @@ local overwrite_confirm = false
 ---Determines whether the Preset File Manager is open.
 ---@type boolean
 local file_man_open = false
+
+---Search query entered in the Preset File Manager.
+---@type string?
+local file_search
 
 --#endregion
 
@@ -511,14 +516,15 @@ end
 ---@return boolean # True if all values can be converted to numbers, false otherwise.
 local function areNumeric(...)
 	for i = 1, select("#", ...) do
-		if not isNumeric(select(i, ...)) then
+		local v = select(i, ...)
+		if not isNumeric(v) then
 			return false
 		end
 	end
 	return true
 end
 
----Compares two Lua values for equality, including support for numbers with tolerance and nested tables.
+---Compares two values for equality, including support for numbers with tolerance and nested tables.
 ---Performs deep comparison for tables and numeric tolerance (1e-4) for numbers or number-like strings.
 ---Also supports booleans, nil, functions, userdata, and threads using standard equality (`==`).
 ---Handles recursive tables safely using a visited map to prevent infinite loops.
@@ -699,7 +705,7 @@ end
 ---@param mode number? # 1 = start only, -1 = end only, or nil = remove all.
 ---@param caseInsensitive boolean? # If true, ignores case when matching the substring. Has no effect if mode is nil (removal anywhere).
 ---@return string The modified string with the specified removal.
-local function removeSubstr(s, sub, mode, caseInsensitive)
+local function stripSub(s, sub, mode, caseInsensitive)
 	if not areString(s, sub) or #sub == 0 or #s < #sub then return s end
 
 	if mode == 1 then
@@ -1036,18 +1042,18 @@ local function getCustomVehicleCameraID()
 		--Iteratively remove known prefixes.
 		repeat
 			local prev = id
-			id = removeSubstr(id, ".", 1)
-			id = removeSubstr(id, "_", 1)
-			id = removeSubstr(id, "VehicleTPP", 1, true)
-			id = removeSubstr(id, "Camera", 1, true)
-			id = removeSubstr(id, "Vehicle", 1, true)
+			id = stripSub(id, ".", 1)
+			id = stripSub(id, "_", 1)
+			id = stripSub(id, "VehicleTPP", 1, true)
+			id = stripSub(id, "Camera", 1, true)
+			id = stripSub(id, "Vehicle", 1, true)
 		until id == prev
 
 		--Remove known suffixes.
 		for _, s in ipairs(CameraLevels) do
-			id = removeSubstr(id, s, -1, true)
-			id = removeSubstr(id, ".", -1)
-			id = removeSubstr(id, "_", -1)
+			id = stripSub(id, s, -1, true)
+			id = stripSub(id, ".", -1)
+			id = stripSub(id, "_", -1)
 		end
 
 		--Only return non-empty ID.
@@ -1058,17 +1064,19 @@ local function getCustomVehicleCameraID()
 	end
 
 	--Filter defaults.
-	local files = dir("defaults")
-	if files then
-		for _, file in ipairs(files) do
-			local s = trimLuaExt(file.name)
-			for i = #ids, 1, -1 do
-				if startsWith(s, ids[i]) then
-					table.remove(ids, i)
-					break
-				end
+	for _, p in pairs(camera_presets) do
+		if not p.IsDefault or p.IsJoined or not isString(p.ID) then
+			goto continue
+		end
+
+		for i = #ids, 1, -1 do
+			if startsWith(p.ID, ids[i]) then
+				table.remove(ids, i)
+				break
 			end
 		end
+
+		::continue::
 	end
 
 	if #ids == 1 then
@@ -1077,7 +1085,7 @@ local function getCustomVehicleCameraID()
 		return result
 	end
 
-	--To prevent re-checks.
+	--Caches negative results to avoid repeated lookups when nothing is found.
 	vehicle_cache.getCustomVehicleCameraID = ""
 
 	return nil
@@ -1111,7 +1119,6 @@ local function getVehicleCameraID()
 	return nil
 end
 
---WIP
 ---Builds a robust and reliable map for vehicle camera TweakDB keys based on their internal data.
 ---This method is especially useful when keys are obfuscated (e.g., modded content with hashed or unreadable key names).
 ---@return table<string, string>|nil # A map from camera preset names (e.g., "High_Close") to raw TweakDB key strings.
@@ -1532,9 +1539,10 @@ local function getDefaultPreset(preset)
 	if not fallback then return nil end
 
 	--Ensures unique keys to prevent conflicts.
-	local key = format("%s_%08x", id, checksum(id))
+	local key = format("%08x_%s", checksum(id), id)
 
 	fallback.IsDefault = true
+	fallback.IsJoined = true
 	camera_presets[key] = fallback
 
 	log(LogLevels.INFO, 0xaced, Text.LOG_ADD_DEF, key)
@@ -1848,7 +1856,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	local path = getPresetFilePath(name, saveAsDefault)
 	if not path or not isTable(preset) then return false end
 
-	--WIP: Save all, as it's unclear which values are actual defaults.
+	--To always save all values, as the currently retrieved defaults may change in future.
 	local isCustom = preset.ID == getCustomVehicleCameraID()
 
 	if not allowOverwrite and not isCustom then
@@ -2125,14 +2133,49 @@ local function getMetrics()
 
 	return w, hf, s, padding_width
 end
----Vertically aligns the next drawn item (typically text) within a cell of known height.
----Calculates offset using the current font height to position the item relative to the vertical center.
----@param cellHeight number # The height of the cell to align within.
-local function alignVertNext(cellHeight)
-	local h = ImGui.GetFontSize()
-	local cy = ImGui.GetCursorPosY()
-	local oy = (cellHeight - h) * 0.5
-	ImGui.SetCursorPosY(cy + oy)
+
+---Aligns the next ImGui item horizontally, vertically, or both.
+---If `x` is a number, only vertical alignment is applied using it as cell height.
+---If `x` is a string, both horizontal (right-aligned) and vertical centering are enabled by default.
+---@param x string|number # Text to align (string) or cell height to vertically center (number).
+---@param hAlign boolean? # If true, right-aligns the next item. Defaults to true if `x` is a string.
+---@param vAlign boolean? # If true, vertically centers the next item. Defaults to true.
+---@param cellHeight number? # Optional height of the cell for vertical centering. Ignored if `x` is a number.
+local function alignNext(x, hAlign, vAlign, cellHeight)
+	if isNumber(x) then
+		---@cast x number
+		if hAlign then
+			hAlign = false
+		end
+		cellHeight = x
+	elseif isString(x) then
+		if hAlign == nil then
+			hAlign = true
+		end
+	else
+		return
+	end
+
+	if vAlign == nil then
+		vAlign = true
+	end
+
+	local style = ImGui.GetStyle()
+	local fh = ImGui.GetFontSize()
+
+	if hAlign then
+		---@cast x string
+		local cw = ImGui.GetColumnWidth()
+		local tw = ImGui.CalcTextSize(x)
+		local cx = ImGui.GetCursorPosX()
+		ImGui.SetCursorPosX(cx + cw - tw)
+	end
+
+	if vAlign then
+		local cy = ImGui.GetCursorPosY()
+		local oy = cellHeight or (fh + style.FramePadding.y * 2)
+		ImGui.SetCursorPosY(cy + (oy - fh) * 0.5)
+	end
 end
 
 ---Adjusts an ABGR color by modifying its alpha, blue, green, and red (weird order in LUA) components.
@@ -2172,7 +2215,7 @@ local function getThreeColorsFrom(idx, base)
 	return base, hover, active
 end
 
----Pushes a set of three related style colors to ImGui's style stack: base, hovered, and active.
+---Pushes a set of up to three related style colors to ImGui's style stack: base, hovered, and active.
 ---Calculated automatically from a single base color by brightening B, G, and R (weird order in LUA) channels.
 ---Returns the number of pushed styles so they can be popped accordingly.
 ---@param idx integer # The ImGuiCol index for the base color (e.g. ImGuiCol.FrameBg or ImGuiCol.Button).
@@ -2181,6 +2224,12 @@ end
 local function pushColors(idx, color)
 	if not areNumber(idx, color) then return 0 end
 
+	if idx ~= ImGuiCol.Button and idx ~= ImGuiCol.FrameBg then
+		ImGui.PushStyleColor(idx, adjustColor(color, 0xff, 32, 32, 32))
+
+		return 1
+	end
+
 	local hoveredIdx, activeIdx = idx + 1, idx + 2
 	local base, hover, active = getThreeColorsFrom(idx, color)
 
@@ -2188,7 +2237,6 @@ local function pushColors(idx, color)
 	ImGui.PushStyleColor(hoveredIdx, hover)
 	ImGui.PushStyleColor(activeIdx, active)
 
-	--Currently always 3; may become dynamic someday.
 	return 3
 end
 
@@ -2370,7 +2418,7 @@ end)
 
 --Display a simple GUI with some options.
 registerForEvent("onDraw", function()
-	--Notification system (requires at least CET 1.35.1).
+	--Notification system (requires at least CET 'v1.35.1').
 	if runtime_full and toaster_active and next(toaster_bumps) then
 		toaster_active = false
 		for k, v in pairs(toaster_bumps) do
@@ -2460,7 +2508,10 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
 	ImGui.PushItemWidth(sliderWidth)
-	dev_mode = ImGui.SliderInt(Text.GUI_DMODE, dev_mode, DevLevels.DISABLED, DevLevels.FULL)
+	local devMode = ImGui.SliderInt(Text.GUI_DMODE, dev_mode, DevLevels.DISABLED, DevLevels.FULL)
+	if devMode ~= dev_mode then
+		dev_mode = min(max(devMode, DevLevels.DISABLED), DevLevels.FULL)
+	end
 	padding_locked = ImGui.IsItemActive()
 	addTooltip(Text.GUI_DMODE_TIP)
 	ImGui.PopItemWidth()
@@ -2588,14 +2639,14 @@ registerForEvent("onDraw", function()
 			ImGui.TableNextRow(0, rowHeight)
 			ImGui.TableSetColumnIndex(0)
 
-			alignVertNext(rowHeight)
+			alignNext(rowHeight)
 			ImGui.Text(row.label)
 			addTooltip(row.tip)
 
 			ImGui.TableSetColumnIndex(1)
 
 			if row.custom then
-				alignVertNext(rowHeight)
+				alignNext(rowHeight)
 				ImGui.Text(row.value)
 
 				local camMap = getVehicleCameraMap()
@@ -2655,7 +2706,7 @@ registerForEvent("onDraw", function()
 					chopUnderscoreParts(appName)
 				))
 			else
-				alignVertNext(rowHeight)
+				alignNext(rowHeight)
 				ImGui.Text(tostring(row.value or Text.GUI_NONE))
 				addTooltip(row.valTip)
 			end
@@ -2714,7 +2765,7 @@ registerForEvent("onDraw", function()
 			ImGui.TableNextRow(0, rowHeight)
 			ImGui.TableSetColumnIndex(0)
 
-			alignVertNext(rowHeight)
+			alignNext(rowHeight)
 			ImGui.Text(row.label)
 			addTooltip(row.tip)
 
@@ -2837,7 +2888,7 @@ registerForEvent("onDraw", function()
 		return
 	end
 
-	if x and y and w and h then
+	if areNumber(x, y, w, h) then
 		ImGui.SetNextWindowPos(x, y)
 		ImGui.SetNextWindowSize(w, h)
 	end
@@ -2846,47 +2897,86 @@ registerForEvent("onDraw", function()
 	file_man_open = ImGui.Begin(Text.GUI_FMAN_TITLE, file_man_open, flags)
 	if not file_man_open then return end
 
+	local barFlags = bor(ImGuiTableFlags.SizingFixedFit, ImGuiTableFlags.NoBordersInBody)
+	local barHeight = math.floor(32 * scale)
+	if ImGui.BeginTable("SearchBar", 3, barFlags) then
+		ImGui.TableSetupColumn("##Label", ImGuiTableColumnFlags.WidthFixed, barHeight)
+		ImGui.TableSetupColumn("##Input", ImGuiTableColumnFlags.WidthStretch)
+		ImGui.TableSetupColumn("##PadRight", ImGuiTableColumnFlags.WidthFixed, barHeight)
+
+		ImGui.TableNextRow()
+
+		ImGui.TableSetColumnIndex(0)
+		local label = "\u{f1a7e}"
+		alignNext(label)
+		ImGui.Text(label)
+
+		ImGui.TableSetColumnIndex(1)
+		ImGui.PushItemWidth(-1)
+		local newVal, changed = ImGui.InputText("##Search", file_search or "", 96)
+		if changed and newVal then
+			file_search = newVal
+		end
+		ImGui.PopItemWidth()
+
+		ImGui.EndTable()
+	end
+	ImGui.Dummy(0, halfHeightPadding)
+
 	local anyFiles = false
 	if ImGui.BeginTable("PresetFiles", 2, ImGuiTableFlags.Borders) then
 		ImGui.TableSetupColumn(" \u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableSetupColumn(" \u{f05e9}", ImGuiTableColumnFlags.WidthFixed)
 		ImGui.TableHeadersRow()
 
-		for _, f in ipairs(files) do
-			local file = f.name
-			if not hasLuaExt(file) then goto continue end
-
-			local k = trimLuaExt(file)
-			if not contains(camera_presets, trimLuaExt(file)) then goto continue end
+		for _, file in ipairs(files) do
+			local f = file.name
+			if not hasLuaExt(f) then goto continue end
 
 			anyFiles = true
+
+			local sp = (file_search or ""):lower()
+			if #sp > 0 and not f:lower():find(sp, 1, true) then
+				goto continue
+			end
+
+			local k = trimLuaExt(f)
+			local c
+			if not contains(camera_presets, k) then
+				c = Colors.GARNET
+			end
 
 			ImGui.TableNextRow()
 			ImGui.TableSetColumnIndex(0)
 
-			alignVertNext(buttonHeight)
+			alignNext(buttonHeight)
+
+			if c then c = pushColors(ImGuiCol.Text, c) end
+
 			local columnWidth = ImGui.GetColumnWidth(0) - 4
-			local textWidth = ImGui.CalcTextSize(file)
+			local textWidth = ImGui.CalcTextSize(f)
 			if columnWidth < textWidth then
-				local short = file
+				local short = f
 				local dots = "..."
 				local cutoff = columnWidth - ImGui.CalcTextSize(dots)
 				while #short > 0 and ImGui.CalcTextSize(short) > cutoff do
 					short = short:sub(1, -2)
 				end
 				ImGui.Text(short .. dots)
-				addTooltip(file)
+				addTooltip(f)
 			else
-				ImGui.Text(file)
+				ImGui.Text(f)
 			end
+
+			if c then popColors(c) end
 
 			ImGui.TableSetColumnIndex(1)
-			if ImGui.Button("\u{f05e8}##" .. file, 0, buttonHeight) then
-				ImGui.OpenPopup(file)
+			if ImGui.Button("\u{f05e8}##" .. f, 0, buttonHeight) then
+				ImGui.OpenPopup(f)
 			end
 
-			if addPopupYesNo(file, format(Text.GUI_FMAN_DEL_CONFIRM, file), scale, Colors.GARNET) then
-				local path = getPresetFilePath(file) ---@cast path string
+			if addPopupYesNo(f, format(Text.GUI_FMAN_DEL_CONFIRM, f), scale, Colors.GARNET) then
+				local path = getPresetFilePath(f) ---@cast path string
 				local ok, err = os.remove(path)
 				if ok then
 					for n in pairs(editor_bundles) do
@@ -2901,9 +2991,9 @@ registerForEvent("onDraw", function()
 						::continue::
 					end
 					setPresetEntry(k)
-					logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_DEL_SUCCESS, file)
+					logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_DEL_SUCCESS, f)
 				else
-					logF(DevLevels.FULL, LogLevels.WARN, 0xcb3d, Text.LOG_DEL_FAILURE, file, err)
+					logF(DevLevels.FULL, LogLevels.WARN, 0xcb3d, Text.LOG_DEL_FAILURE, f, err)
 				end
 			end
 
@@ -2930,8 +3020,8 @@ end)
 
 --Restores default camera offsets for vehicles upon mod shutdown.
 registerForEvent("onShutdown", function()
-	restoreAllCustomCameraParams()
 	restoreAllPresets()
+	restoreAllCustomCameraParams()
 end)
 
 --#endregion
