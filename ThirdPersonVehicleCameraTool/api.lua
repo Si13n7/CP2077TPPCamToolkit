@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-10-17, 18:36 UTC+01:00 (MEZ)
+Version: 2025-10-25, 13:35 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -262,12 +262,6 @@ Game = Game
 ---@field z number # The Z-coordinate.
 ---@field new fun(x: number, y: number, z: number): Vector3 # Creates a new Vector3 instance with specified x, y, and z coordinates.
 Vector3 = Vector3
-
----Provides functions for encoding tables to JSON strings and decoding JSON strings to Lua tables.
----@class json
----@field encode fun(value: any): string # Converts a Lua table or value to a JSON-formatted string. Returns a string representation of the data.
----@field decode fun(jsonString: string): table # Converts a JSON-formatted string to a Lua table. Returns the parsed table if successful, or nil if the parsing fails.
-json = json
 
 ---Retrieves a reference to a loaded CET mod by name.
 ---@class GetMod # Not a class — provided by CET.

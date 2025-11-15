@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-10-19, 13:14 UTC+01:00 (MEZ)
+Version: 2025-10-25, 13:35 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -1998,7 +1998,7 @@ local function log(lvl, id, fmt, ...)
 	local now = os.time()
 	if cache[hash] and cache[hash] >= now then return end
 
-	local cutoff = now - 5
+	local cutoff = now - 60
 	for k, v in pairs(cache) do
 		if v < cutoff then
 			cache[k] = nil
@@ -2094,7 +2094,7 @@ local function asyncRepeat(interval, callback)
 	async.idCounter = async.idCounter + 1
 
 	local id = async.idCounter
-	local time = abs(isNumber(interval) and interval or 0)
+	local time = abs(tonumber(interval) or 0)
 	async.timers[id] = {
 		Interval = time,
 		Callback = callback,
@@ -4581,8 +4581,8 @@ local function drawRuler(scale, maxWidth, maxHeight)
 
 	local lineH = ImGui.GetTextLineHeight() * 0.2
 	local posX, posY = ImGui.GetCursorPos()
-	local fov = get(config.options.fov, 69, "Value")
-	local zoom = get(config.options.zoom, 1.00, "Value")
+	local fov = get(config.options, 69, "fov", "Value")
+	local zoom = get(config.options, 1.00, "zoom", "Value")
 	local ticks = fov > 69 and fov or 62
 
 	local indices = (function()
@@ -5236,8 +5236,9 @@ local function onInit()
 				end
 			end
 			if not available then
-				config.options.closerBikes.Value = config.options.closerBikes.Default
-				config.options.closerBikes.IsNotAvailable = true
+				local option = deep(config.options, "closerBikes")
+				option.Value = option.Default
+				option.IsNotAvailable = true
 			end
 		end
 	end
@@ -5346,10 +5347,10 @@ registerForEvent("onInit", function()
 	state.isCetTopical = isVersionAtLeast(state.cetVersion, "1.35.1")
 
 	--Codeware dependencies.
-	---@diagnostic disable-next-line
+	---@diagnostic disable-next-line: undefined-global
 	state.isCodewareAvailable = isUserdata(Codeware)
 	if not state.isCodewareAvailable then
-		config.options.zoom.IsNotAvailable = false
+		deep(config.options, "zoom").IsNotAvailable = false
 	end
 
 	--Ensures the log file is fresh when the mod initializes.
@@ -5372,7 +5373,7 @@ registerForEvent("onInit", function()
 	--Set FOV limits from user settings.
 	local settings = getUserSettingsOption("/graphics/basic", "FieldOfView")
 	if isTableValid(settings) then
-		local fov = config.options.fov
+		local fov = deep(config.options, "fov")
 		fov.Min = math.max(fov.Min, floor(settings.MinValue / 3.5))
 		fov.Max = math.min(fov.Max, settings.MaxValue + 10)
 	end
@@ -5535,21 +5536,20 @@ registerForEvent("onInit", function()
 			native.addTab(tab, Text.GUI_TITLE)
 		end
 
-		--Global Settings
-		local cat = combine(tab, "GlobalSettings")
-		if native.pathExists(cat) then
-			native.removeSubcategory(cat)
-		end
-		native.addSubcategory(cat, Text.NUI_CAT_GSET)
+		--Ensures that multiple save queues aren't started simultaneously.
+		local pendingSaves = {}
 
-		local isSaving = {}
+		---Asynchronous queue that delays saving until the settings tab is closed.
+		---@param advanced boolean? # If true, Advanced Options are saved; otherwise, Global Settings are saved.
 		local function saveToFile(advanced)
-			if isSaving[advanced] then return end
-			isSaving[advanced] = true
+			advanced = advanced == true
+			if pendingSaves[advanced] then return end
+
+			pendingSaves[advanced] = true
 			asyncRepeat(3, function(id)
 				if nilOrEmpty(native.currentTab) then
 					asyncStop(id)
-					isSaving[advanced] = false
+					pendingSaves[advanced] = false
 					if advanced == 0 then
 						saveGlobalOptions()
 					else
@@ -5560,62 +5560,76 @@ registerForEvent("onInit", function()
 			end)
 		end
 
-		for key, option in opairs(config.options, "DisplayName") do
-			if option.IsNotAvailable then goto continue end
-
-			local function setValue(value)
-				updateConfigDefaultParam(key, value, true)
-				saveToFile(0)
-			end
-
-			local label = option.DisplayName
-			local desc = option.Description or option.Tooltip
-			local default = option.Default
-			local current = option.Value
-			local items = option.Values
-			local speed = option.Speed
-
-			if isTableValid(items) then
-				config.nativeOptions[key] = native.addSelectorString(
-					cat,
-					label,
-					desc,
-					items,
-					current,
-					default,
-					setValue
-				)
+		---Adds a settings option dynamically based on its type (list, boolean, or numeric).
+		---Used internally to register configuration entries with the native settings system.
+		---@param key string # Unique option identifier.
+		---@param section string # The subcategory where the option appears in the Settings UI.
+		---@param label string # Display name shown in the settings UI.
+		---@param desc string # Description text.
+		---@param default number|boolean # Default value for the option.
+		---@param value number|boolean # Current value of the option.
+		---@param min number? # Minimum numeric value (for sliders).
+		---@param max number? # Maximum numeric value (for sliders).
+		---@param speed number? # Step size for numeric options; fractional speeds imply float sliders.
+		---@param list string[]? # Optional list of selectable string values.
+		---@param setValue function # Callback used when the value changes.
+		local function addOption(key, section, label, desc, default, value, min, max, speed, list, setValue)
+			local added
+			if isTableValid(list) then
+				added = native.addSelectorString(section, label, desc, list, value, default, setValue)
 			elseif isBoolean(default) then
-				config.nativeOptions[key] = native.addSwitch(
-					cat,
-					label,
-					desc,
-					current,
-					default,
-					setValue
-				)
+				added = native.addSwitch(section, label, desc, value, default, setValue)
 			elseif isNumber(default) then
-				local isFloat = speed % 1 ~= 0
+				speed = speed or 1
 
-				local parameters = {
-					cat,
+				local isFloat = speed % 1 ~= 0
+				added = (isFloat and native.addRangeFloat or native.addRangeInt)(
+					section,
 					label,
 					desc,
-					option.Min or -math.huge,
-					option.Max or math.huge,
+					min,
+					max,
 					speed,
-					isFloat and getPrecision(speed) or current,
-					isFloat and current or default,
-					isFloat and default or setValue
-				}
-				if isFloat then
-					insert(parameters, setValue)
-				end
-
-				config.nativeOptions[key] = (isFloat and native.addRangeFloat or native.addRangeInt)(unpack(parameters))
+					isFloat and getPrecision(speed) or value,
+					isFloat and value or default,
+					isFloat and default or setValue,
+					isFloat and setValue or nil
+				)
 			end
+			if added then
+				if config.nativeOptions[key] then
+					logF(DevLevels.FULL, LogLevels.ERROR, 0xc024, Text.LOG_KEY_DUPLICATE, key)
+				end
+				config.nativeOptions[key] = added
+			end
+		end
 
-			::continue::
+		--Global Settings
+		local cat = combine(tab, "GlobalSettings")
+		if native.pathExists(cat) then
+			native.removeSubcategory(cat)
+		end
+		native.addSubcategory(cat, Text.NUI_CAT_GSET)
+
+		for key, option in opairs(config.options, "DisplayName") do
+			if not option.IsNotAvailable then
+				addOption(
+					key,
+					cat,
+					option.DisplayName,
+					option.Description or option.Tooltip,
+					option.Default,
+					option.Value,
+					option.Min,
+					option.Max,
+					option.Speed,
+					option.Values,
+					function(value)
+						updateConfigDefaultParam(key, value, true)
+						saveToFile()
+					end
+				)
+			end
 		end
 
 		--Advanced Settings
@@ -5633,52 +5647,33 @@ registerForEvent("onInit", function()
 			for var, origin in opairs(DefaultParams.Vars) do
 				if config.options[var] then goto continue end
 
+				local label = truncateMiddle(camelToHuman(var), 48)
 				local default = pluck(origin.Default, i)
 				local current = get(config.advancedOptions, default, i, var)
-				local step = origin.Step or 1
-
-				local function setValue(value)
-					updateAdvancedConfigDefaultParam(i, var, value, true)
-					saveToFile(1)
-				end
-
-				local label = truncateMiddle(camelToHuman(var), 48)
 				local defText
 				if isBoolean(default) then
 					defText = default and Text.GUI_ON or Text.GUI_OFF
 				else
 					defText = tostring(default)
 				end
-				local note = format(Text.NUI_VAL_NOTE, origin.Tip or Text.GUI_GSET_ADVANCED_TIP, defText)
-				if isBoolean(default) then
-					config.nativeOptions[i .. var] = native.addSwitch(
-						cat,
-						label,
-						note,
-						current,
-						default,
-						setValue
-					)
-				elseif isNumber(default) then
-					local isFloat = step % 1 ~= 0
+				local desc = format(Text.NUI_VAL_NOTE, origin.Tip or Text.GUI_GSET_ADVANCED_TIP, defText)
 
-					local parameters = {
-						cat,
-						label,
-						note,
-						origin.Min or -math.huge,
-						origin.Max or math.huge,
-						step,
-						isFloat and getPrecision(step) or current,
-						isFloat and current or default,
-						isFloat and default or setValue
-					}
-					if isFloat then
-						insert(parameters, setValue)
+				addOption(
+					i .. var,
+					cat,
+					label,
+					desc,
+					default,
+					current,
+					origin.Min,
+					origin.Max,
+					origin.Step or 1,
+					nil,
+					function(value)
+						updateAdvancedConfigDefaultParam(i, var, value, true)
+						saveToFile(true)
 					end
-
-					config.nativeOptions[i .. var] = (isFloat and native.addRangeFloat or native.addRangeInt)(unpack(parameters))
-				end
+				)
 
 				::continue::
 			end
@@ -5917,110 +5912,121 @@ registerForEvent("onDraw", function()
 
 	--Table showing vehicle name, camera ID and more — if certain conditions are met.
 	local cache = getCache(0xcb3d) or {}
-	local vehicle, name, appName, id, key, displayName, status, statusText, camHeight, activeCam, activeCamText
+	local vehicle, name, appName, id, key, displayName, status, statusText, camHeight, activeCam, activeCamText, isCloserBikes
 	local steps = {
 		function()
 			return not isLocked and state.devMode > DevLevels.DISABLED
 		end,
 		function()
 			vehicle = getMountedVehicle()
-			return vehicle
+			return vehicle ~= nil
 		end,
 		function()
 			name = getVehicleName()
-			if not name then
-				log(LogLevels.ERROR, 0xcb3d, Text.LOG_VEH_NAME_MISS)
-			end
-			return name
+			if name ~= nil then return true end
+
+			log(LogLevels.ERROR, 0xcb3d, Text.LOG_VEH_NAME_MISS)
+			return false
 		end,
 		function()
 			appName = getVehicleAppearanceName()
-			if not appName then
-				log(LogLevels.ERROR, 0xcb3d, Text.LOG_APP_NOT_FOUND)
-			end
-			return appName
+			if appName ~= nil then return true end
+
+			log(LogLevels.ERROR, 0xcb3d, Text.LOG_APP_NOT_FOUND)
+			return false
 		end,
 		function()
 			id = getVehicleCameraID()
-			if not id then
-				log(LogLevels.ERROR, 0xcb3d, Text.LOG_CAM_ID_MISS)
-				addText(Text.LOG_CAM_ID_MISS, Colors.GARNET, halfHeightPadding, contentWidth, itemSpacing)
-			end
-			return id
+			if id ~= nil then return true end
+
+			log(LogLevels.ERROR, 0xcb3d, Text.LOG_CAM_ID_MISS)
+			addText(Text.LOG_CAM_ID_MISS, Colors.GARNET, halfHeightPadding, contentWidth, itemSpacing)
+			return false
 		end,
 		function()
 			key = cache.key
-			if isString(key) then return key end
+			if key ~= nil then return true end
+
 			key = name ~= appName and findPresetKey(name, appName) or findPresetKey(name) or name
-			if not key then
-				log(LogLevels.ERROR, 0xcb3d, Text.LOG_CAM_ID_MISS)
-			end
 			cache.key = key
 			setCache(0xcb3d, cache)
-			return key
+			return key ~= nil
 		end,
 		function()
 			displayName = cache.displayName
-			if isString(displayName) then return displayName end
+			if displayName ~= nil then return true end
+
 			displayName = getVehicleDisplayName() or Text.GUI_UNKNOWN
 			cache.displayName = displayName
 			setCache(0xcb3d, cache)
-			return displayName
+			return true
 		end,
 		function()
 			status = cache.status
-			if isString(status) then return status end
+			if status ~= nil then return true end
+
 			status = getVehicleStatus()
 			cache.status = status
 			setCache(0xcb3d, cache)
-			return status
+			return true
 		end,
 		function()
 			statusText = cache.statusText
-			if isString(statusText) then return statusText end
+			if statusText ~= nil then return true end
+
 			statusText = ({
-				[0] = Text.GUI_TBL_VAL_STATE_0,
-				[1] = Text.GUI_TBL_VAL_STATE_1,
-				[2] = Text.GUI_TBL_VAL_STATE_2
+				[0] = Text.GUI_EDIT_VAL_STATE_0,
+				[1] = Text.GUI_EDIT_VAL_STATE_1,
+				[2] = Text.GUI_EDIT_VAL_STATE_2
 			})[status] or Text.GUI_UNKNOWN
 			cache.statusText = statusText
 			setCache(0xcb3d, cache)
-			return statusText
+			return true
 		end,
 		function()
 			camHeight = cache.camHeight
-			if isString(camHeight) then return camHeight end
+			if camHeight ~= nil then return true end
+
 			local height = getUserSettingsCameraHeight()
-			camHeight = equals(height, "Low") and Text.GUI_TBL_VAL_CAMH_0 or Text.GUI_TBL_VAL_CAMH_1
+			camHeight = equals(height, "Low") and Text.GUI_EDIT_VAL_CAMH_0 or Text.GUI_EDIT_VAL_CAMH_1
 			cache.camHeight = camHeight
 			setCache(0xcb3d, cache)
-			return camHeight
+			return true
 		end,
 		function()
 			local player = Game.GetPlayer()
 			local manager = player and player:FindVehicleCameraManager()
 			local active = manager and manager:GetActivePerspective()
 			activeCam = active and tonumber(Game.EnumValueFromString("vehicleCameraPerspective", active.value)) or -1
-			return activeCam
+			return true
 		end,
 		function()
 			local text = ({
-				[0] = Text.GUI_TBL_VAL_CAMA_0,
-				[1] = Text.GUI_TBL_VAL_CAMA_1,
-				[2] = Text.GUI_TBL_VAL_CAMA_2,
-				[3] = Text.GUI_TBL_VAL_CAMA_3,
-				[4] = Text.GUI_TBL_VAL_CAMA_4,
-				[5] = Text.GUI_TBL_VAL_CAMA_5,
-				[6] = Text.GUI_TBL_VAL_CAMA_6,
+				[0] = Text.GUI_EDIT_VAL_CAMA_0,
+				[1] = Text.GUI_EDIT_VAL_CAMA_1,
+				[2] = Text.GUI_EDIT_VAL_CAMA_2,
+				[3] = Text.GUI_EDIT_VAL_CAMA_3,
+				[4] = Text.GUI_EDIT_VAL_CAMA_4,
+				[5] = Text.GUI_EDIT_VAL_CAMA_5,
+				[6] = Text.GUI_EDIT_VAL_CAMA_6,
 			})[activeCam] or Text.GUI_UNKNOWN
 			activeCamText = activeCam == 0 and text or format(text, camHeight)
-			return activeCamText
+			return true
+		end,
+		function()
+			isCloserBikes = cache.isCloserBikes
+			if isCloserBikes ~= nil then return true end
+
+			cache.isCloserBikes = get(config.options, 1, "closerBikes", "Value") > 1
+			isCloserBikes = cache.isCloserBikes
+			setCache(0xcb3d, cache)
+			return true
 		end
 	}
 
 	local failed = false
-	for _, fn in ipairs(steps) do
-		if not fn() then
+	for _, step in ipairs(steps) do
+		if not step() then
 			failed = true
 			break
 		end
@@ -6105,6 +6111,18 @@ registerForEvent("onDraw", function()
 		ImGui.End()
 	end
 
+	--Show a warning if a bike preset cannot be edited.
+	if not isStillVisible and isCloserBikes and equalsAny(id, "2w_Preset", "Brennan_Preset") then
+		ImGui.PushStyleColor(ImGuiCol.Text, setAlpha(Colors.GARNET, 0xff))
+		addTextCenterWrap(Text.GUI_EDIT_CB_WARN, contentWidth)
+		ImGui.PopStyleColor()
+		ImGui.Dummy(0, doubleHeightPadding)
+
+		isLocked = true
+		ImGui.BeginDisabled(true)
+	end
+
+	--Display some vehicle information.
 	local presetName = (flux.Name ~= key or presetExists(key, id)) and flux.Name or id
 	if ImGui.BeginTable("PresetInfo", 2, ImGuiTableFlags.Borders) then
 		ImGui.TableSetupColumn("\u{f11be}", ImGuiTableColumnFlags.WidthFixed, -1)
@@ -6116,23 +6134,23 @@ registerForEvent("onDraw", function()
 		local customIdText = isStringValid(customID) and format("%s : %s", customID, activeCamText) or nil
 		local baseIdText = customIdText ~= nil and id or format("%s : %s", id, activeCamText)
 		local rows = {
-			{ label = "\u{f0208}", tip = Text.GUI_TBL_LABL_DNAME_TIP,  value = displayName },
-			{ label = "\u{f1975}", tip = Text.GUI_TBL_LABL_STATUS_TIP, value = statusText },
-			{ label = "\u{f1b8d}", tip = Text.GUI_TBL_LABL_VEH_TIP,    value = name },
-			{ label = "\u{f0301}", tip = Text.GUI_TBL_LABL_APP_TIP,    value = appName,    isDisabled = equNames },
-			{ label = "\u{f0567}", tip = Text.GUI_TBL_LABL_CAMID_TIP,  value = baseIdText, isDisabled = id == customID },
+			{ label = "\u{f0208}", tip = Text.GUI_EDIT_LABL_DNAME_TIP,  value = displayName },
+			{ label = "\u{f1975}", tip = Text.GUI_EDIT_LABL_STATUS_TIP, value = statusText },
+			{ label = "\u{f1b8d}", tip = Text.GUI_EDIT_LABL_VEH_TIP,    value = name },
+			{ label = "\u{f0301}", tip = Text.GUI_EDIT_LABL_APP_TIP,    value = appName,    isDisabled = equNames },
+			{ label = "\u{f0567}", tip = Text.GUI_EDIT_LABL_CAMID_TIP,  value = baseIdText, isDisabled = id == customID },
 			{
 				label      = "\u{f0569}",
-				tip        = Text.GUI_TBL_LABL_CCAMID_TIP,
+				tip        = Text.GUI_EDIT_LABL_CCAMID_TIP,
 				value      = customIdText,
-				valTip     = Text.GUI_TBL_VAL_CCID_TIP,
+				valTip     = Text.GUI_EDIT_VAL_CCID_TIP,
 				isCustomID = customIdText ~= nil
 			},
 			{
 				label      = "\u{f1668}",
-				tip        = Text.GUI_TBL_LABL_PSET_TIP,
+				tip        = Text.GUI_EDIT_LABL_PSET_TIP,
 				value      = presetName,
-				valTip     = equNames and Text.GUI_TBL_VAL_PSET_TIP2 or Text.GUI_TBL_VAL_PSET_TIP1,
+				valTip     = equNames and Text.GUI_EDIT_VAL_PSET_TIP2 or Text.GUI_EDIT_VAL_PSET_TIP1,
 				isDisabled = isStillVisible and presetName == id,
 				isEditable = true
 			}
@@ -6296,17 +6314,17 @@ registerForEvent("onDraw", function()
 		ImGui.TableHeadersRow()
 
 		local rows = {
-			{ label = "\u{f0623}", tip = Text.GUI_TBL_LABL_CAM_1_TIP, isActive = equalsAny(activeCam, 1, 4), isCombat = activeCam == 4 },
-			{ label = "\u{f0622}", tip = Text.GUI_TBL_LABL_CAM_2_TIP, isActive = equalsAny(activeCam, 2, 5), isCombat = activeCam == 5 },
-			{ label = "\u{f0621}", tip = Text.GUI_TBL_LABL_CAM_3_TIP, isActive = equalsAny(activeCam, 3, 6), isCombat = activeCam == 6 }
+			{ label = "\u{f0623}", tip = Text.GUI_EDIT_LABL_CAM_1_TIP, isActive = equalsAny(activeCam, 1, 4), isCombat = activeCam == 4 },
+			{ label = "\u{f0622}", tip = Text.GUI_EDIT_LABL_CAM_2_TIP, isActive = equalsAny(activeCam, 2, 5), isCombat = activeCam == 5 },
+			{ label = "\u{f0621}", tip = Text.GUI_EDIT_LABL_CAM_3_TIP, isActive = equalsAny(activeCam, 3, 6), isCombat = activeCam == 6 }
 		}
 
 		local tips = {
-			Text.GUI_TBL_VAL_A_TIP,
-			Text.GUI_TBL_VAL_X_TIP,
-			Text.GUI_TBL_VAL_Y_TIP,
-			Text.GUI_TBL_VAL_Z_TIP,
-			Text.GUI_TBL_VAL_D_TIP
+			Text.GUI_EDIT_VAL_A_TIP,
+			Text.GUI_EDIT_VAL_X_TIP,
+			Text.GUI_EDIT_VAL_Y_TIP,
+			Text.GUI_EDIT_VAL_Z_TIP,
+			Text.GUI_EDIT_VAL_D_TIP
 		}
 
 		for i, row in ipairs(rows) do
@@ -6376,7 +6394,7 @@ registerForEvent("onDraw", function()
 		ImGui.Dummy(0, halfHeightPadding)
 	end
 
-	--Create bottom controls only if CET is open
+	--Create bottom controls only if CET is open.
 	if isStillVisible then
 		popColors(pushedColors)
 		ImGui.End()
@@ -6442,8 +6460,11 @@ registerForEvent("onDraw", function()
 		--were blocked just because the mod assumes there are no changes.
 		saveEditorPreset(key, flux, finale, tasks, status)
 	end
-
 	ImGui.Dummy(0, heightPadding)
+
+	if isLocked then
+		ImGui.EndDisabled()
+	end
 
 	--Button to open the Preset Explorer.
 	ImGui.Separator()
