@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-14, 18:36 UTC+01:00 (MEZ)
+Version: 2025-04-14, 21:07 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -323,14 +323,14 @@ local _guiLockPadding
 ---Tracks different versions of the preset to properly trace changes.
 ---@class IEditorPresetData
 ---@field Current ICameraPreset? # The currently edited preset (may be modified by the UI).
----@field CHash number? # Hash of the Current data, used for change tracking.
----@field CName string? # Editable working name for the current preset.
+---@field CurToken number? # Checksum of the Current data, used for change tracking.
+---@field CurName string? # Editable working name for the current preset.
 ---@field Default ICameraPreset? # The original default preset values for this vehicle.
----@field DHash number? # Hash of the Default preset.
+---@field DefToken number? # Checksum of the Default preset.
 ---@field Origin ICameraPreset? # A previous version of Current that has not been applied yet.
----@field OHash number? # Hash of the Origin preset.
+---@field OrigToken number? # Checksum of the Origin preset.
 ---@field Source ICameraPreset? # The initial state of Current before it was ever saved permanently.
----@field SHash number? # Hash of the Source preset.
+---@field SrcToken number? # Checksum of the Source preset.
 ---@field RefreshPending boolean? # Indicates the editor UI should refresh its internal state.
 ---@field ApplyPending boolean? # Indicates changes that can be applied to take effect in-game.
 ---@field SavePending boolean? # Indicates that there are unsaved changes that can be saved.
@@ -407,25 +407,38 @@ function LogE(mode, level, format, ...)
 	DevMode = previous
 end
 
----Checks whether a given value is a valid number.
----@param n any # The value to check.
----@return boolean # True if the value is a valid number, false otherwise.
-local function isNumber(n)
-	return type(n) == "number"
+---Checks whether all provided arguments are of a specified Lua type.
+---@param t string # The expected Lua type name (e.g., "number", "string", "table", etc.).
+---@param ... any # A variable number of values to check.
+---@return boolean # Returns true if all arguments match the specified type, false otherwise.
+local function isType(t, ...)
+	for i = 1, select("#", ...) do
+		if type(select(i, ...)) ~= t then
+			return false
+		end
+	end
+	return true
 end
 
----Checks whether the given value is a string.
----@param s any # The value to check.
----@return boolean # True if the value is a string, false otherwise.
-local function isString(s)
-	return type(s) == "string"
+---Checks whether all provided arguments are of type `number`.
+---@param ... any # A variable number of values to check.
+---@return boolean # Returns true only if all arguments are numbers.
+local function isNumber(...)
+	return isType("number", ...)
 end
 
----Checks whether the given value is a table.
----@param t any # The value to check.
----@return boolean # True if the value is a table, false otherwise.
-local function isTable(t)
-	return type(t) == "table"
+---Checks whether all provided arguments are of type `string`.
+---@param ... any # A variable string of values to check.
+---@return boolean # Returns true only if all arguments are strings.
+local function isString(...)
+	return isType("string", ...)
+end
+
+---Checks whether all provided arguments are of type `table`.
+---@param ... any # A variable table of values to check.
+---@return boolean # Returns true only if all arguments are tables.
+local function isTable(...)
+	return isType("table", ...)
 end
 
 ---Checks whether a given string represents a valid number (integer or float).
@@ -469,10 +482,11 @@ end
 local function contains(x, v)
 	if x == nil or v == nil then return false end
 
-	if isString(x) and isString(v) then
+	if isString(x, v) then
 		---@cast x string
 		---@cast v string
-		return x:find(v, 1, true) ~= nil
+		if #x == #v then return x == v end
+		return #x > #v and x:find(v, 1, true) ~= nil
 	elseif isTable(x) then
 		---@cast x table
 		for k, e in pairs(x) do
@@ -486,67 +500,69 @@ local function contains(x, v)
 end
 
 ---Checks if a string starts with a given prefix.
----@param str string # The string to check.
----@param prefix string # The prefix to match.
----@return boolean # True if `str` starts with `prefix`, false otherwise.
-local function startsWith(str, prefix)
-	if not str or not prefix then return false end
-	str, prefix = tostring(str), tostring(prefix)
-	return #str >= #prefix and str:sub(1, #prefix) == prefix
+---@param s string # The string to check.
+---@param v string # The prefix to match.
+---@return boolean # True if `s` starts with `v`, false otherwise.
+local function startsWith(s, v)
+	if not s or not v then return false end
+	s, v = tostring(s), tostring(v)
+	if #s == #v then return s == v end
+	return #s > #v and s:sub(1, #v) == v
 end
 
 ---Checks if a string ends with a specified suffix.
----@param str string # The string to check.
----@param suffix string # The suffix to look for.
----@return boolean Returns # True if the `str` ends with the specified `suffix`, otherwise false.
-local function endsWith(str, suffix)
-	if not str or not suffix then return false end
-	str, suffix = tostring(str), tostring(suffix)
-	return #str >= #suffix and str:sub(- #suffix) == suffix
+---@param s string # The string to check.
+---@param v string # The suffix to look for.
+---@return boolean Returns # True if the `s` ends with the specified `v`, otherwise false.
+local function endsWith(s, v)
+	if not s or not v then return false end
+	s, v = tostring(s), tostring(v)
+	if #s == #v then return s == v end
+	return #s > #v and s:sub(- #v) == v
 end
 
 ---Returns a shortened version of the input string by removing a number of trailing underscore-separated parts.
 ---The number of parts removed depends on how many underscores are in the string.
----@param str string # The input string (e.g., "v_sport2_porsche_911turbo_player").
+---@param s string # The input string (e.g., "v_sport2_porsche_911turbo_player").
 ---@return string # The shortened string (e.g., "v_sport2_porsche").
-local function chopUnderscoreParts(str)
-	local parts = {}
-	str = tostring(str or "")
-	for part in str:gmatch("[^_]+") do
-		table.insert(parts, part)
+local function chopUnderscoreParts(s)
+	local t = {}
+	s = tostring(s or "")
+	for p in s:gmatch("[^_]+") do
+		table.insert(t, p)
 	end
-	local count = #parts / 2
-	if count <= 1 then
-		count = count + 1
+	local n = #t / 2
+	if n <= 1 then
+		n = n + 1
 	end
-	return table.concat(parts, "_", 1, count)
+	return table.concat(t, "_", 1, n)
 end
 
 ---Checks if a given filename string ends with `.lua`.
----@param name string # The value to check, typically a string representing a filename.
+---@param s string # The value to check, typically a string representing a filename.
 ---@return boolean # Returns `true` if the filename ends with `.lua`, otherwise `false`.
-local function hasLuaExt(name)
-	if not name then return false end
-	name = tostring(name)
-	return endsWith(name, ".lua")
+local function hasLuaExt(s)
+	if not s then return false end
+	s = tostring(s)
+	return endsWith(s, ".lua")
 end
 
 ---Returns the file name with a `.lua` extension. If the input already ends with `.lua`, it is returned unchanged.
----@param name string # The input value to be converted to a Lua file name.
+---@param s string # The input value to be converted to a Lua file name.
 ---@return string # The file name with `.lua` extension, or an empty string if the input is `nil`.
-local function ensureLuaExt(name)
-	if not name then return "" end
-	name = tostring(name)
-	return hasLuaExt(name) and name or name .. ".lua"
+local function ensureLuaExt(s)
+	if not s then return "" end
+	s = tostring(s)
+	return hasLuaExt(s) and s or s .. ".lua"
 end
 
 ---Removes the `.lua` extension from a filename if present.
----@param name string? # The filename to process.
+---@param s string? # The filename to process.
 ---@return string # The filename without `.lua` extension, or the original string if no `.lua` extension is found.
-local function trimLuaExt(name)
-	if not name then return "" end
-	name = tostring(name)
-	return hasLuaExt(name) and name:gsub("%.lua$", "") or name
+local function trimLuaExt(s)
+	if not s then return "" end
+	s = tostring(s)
+	return hasLuaExt(s) and s:gsub("%.lua$", "") or s
 end
 
 ---Iterates over a table's keys in sorted order.
@@ -555,17 +571,17 @@ end
 ---@return fun(): any, any # An iterator that yields key-value pairs in sorted key order.
 local function kpairs(t)
 	t = isTable(t) and t or {}
-	local keys = {}
+	local ks = {}
 	for k in pairs(t) do
-		table.insert(keys, k)
+		table.insert(ks, k)
 	end
-	table.sort(keys, function(a, b)
+	table.sort(ks, function(a, b)
 		return tostring(a) < tostring(b)
 	end)
 	local i = 0
 	return function()
 		i = i + 1
-		local k = keys[i]
+		local k = ks[i]
 		if k ~= nil then
 			return k, t[k]
 		end
@@ -650,8 +666,8 @@ local function split(s, sep)
 	if not s then return {} end
 	sep = sep or ","
 	local t = {}
-	for s in string.gmatch(s, "([^" .. sep .. "]+)") do
-		table.insert(t, s)
+	for v in string.gmatch(s, "([^" .. sep .. "]+)") do
+		table.insert(t, v)
 	end
 	return t
 end
@@ -676,16 +692,18 @@ local function stringOf(x)
 	return s:sub(1, -2) .. "}"
 end
 
----Generates a simple numeric hash from a string.
----@param x any # The value to hash.
----@return integer # A numeric hash value.
-local function hash(x)
+---Calculates a non-cryptographic checksum of any value using Adler-32.
+---Used to detect changes in structured data like tables.
+---@param x any # The value to calculate the checksum for.
+---@return integer # A 32-bit checksum value.
+local function checksum(x)
 	local s = stringOf(x)
-	local n = 5381
+	local a, b = 1, 0
 	for i = 1, #s do
-		n = bit32.bxor(bit32.lshift(n, 5) + n, s:byte(i))
+		a = (a + s:byte(i)) % 65521
+		b = (b + a) % 65521
 	end
-	return bit32.band(n, 0x7fffffff)
+	return bit32.bor(bit32.lshift(b, 16), a)
 end
 
 ---Checks whether a file with the given name exists and is readable.
@@ -846,7 +864,7 @@ end
 ---@param newKey string? # The newly entered preset key that should be validated.
 ---@return string # Returns the validated preset key (without `.lua` extension), or `currentKey` if validation fails.
 local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey)
-	if not isString(vehicleName) or not isString(appearanceName) then return currentKey end
+	if not isString(vehicleName, appearanceName) then return currentKey end
 	if not isString(currentKey) then return vehicleName end
 	if not isString(newKey) then return currentKey end
 
@@ -864,9 +882,9 @@ local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey
 	end
 
 	if vehicleName ~= appearanceName then
-		Log(LogLevel.WARN, Text.LOG_NAMES_MISMATCH, vehicleName, appearanceName)
+		Log(LogLevel.WARN, Text.LOG_NAMES_MISM, vehicleName, appearanceName)
 	else
-		Log(LogLevel.WARN, Text.LOG_NAME_MISMATCH, vehicleName)
+		Log(LogLevel.WARN, Text.LOG_NAME_MISM, vehicleName)
 	end
 
 	return currentKey
@@ -897,13 +915,13 @@ local function getPreset(id)
 
 		if preset.Far and preset.Medium and preset.Close then
 			if DevMode >= DevLevel.FULL then
-				Log(LogLevel.INFO, Text.LOG_CAMERA_OFFSET_COMPLETE, id)
+				Log(LogLevel.INFO, Text.LOG_CAM_OSET_DONE, id)
 			end
 			return preset
 		end
 	end
 
-	Log(LogLevel.ERROR, Text.LOG_COULD_NOT_RETRIEVE, id)
+	Log(LogLevel.ERROR, Text.LOG_NO_CAM_OSET, id)
 	return nil
 end
 
@@ -919,13 +937,13 @@ local function getDefaultPreset(preset)
 	for _, item in pairs(_cameraPresets) do
 		if item.IsDefault and item.ID == id then
 			if DevMode >= DevLevel.FULL then
-				Log(LogLevel.INFO, Text.LOG_FOUND_DEFAULT, id)
+				Log(LogLevel.INFO, Text.LOG_FOUND_DEF, id)
 			end
 			return item
 		end
 	end
 
-	Log(LogLevel.ERROR, Text.LOG_MISSING_DEFAULT, id)
+	Log(LogLevel.ERROR, Text.LOG_MISS_DEF, id)
 
 	local fallback = getPreset(id)
 	if not fallback then return nil end
@@ -945,7 +963,7 @@ end
 ---@return number z # The Z offset value. Falls back to a default per level (Close = 1.115, Medium = 1.65, Far = 2.25).
 local function getOffsetData(preset, fallback, level)
 	if not isTable(preset) or not contains(CAMERA_LEVELS, level) then
-		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_NO_PRESET_FOR_LEVEL, level)
+		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_NO_PSET_FOR_LVL, level)
 		return 0, 0, 0, 0 --Should never be returned with the current code.
 	end
 
@@ -984,7 +1002,7 @@ local function applyPreset(preset, count)
 		if not key then return end
 
 		if DevMode >= DevLevel.ALERT then
-			Log(LogLevel.INFO, Text.LOG_CAMERA_PRESET, key)
+			Log(LogLevel.INFO, Text.LOG_CAM_PSET, key)
 		end
 
 		applyPreset(_cameraPresets[key], 0)
@@ -994,7 +1012,7 @@ local function applyPreset(preset, count)
 	if preset and preset.Link then
 		count = (count or 0) + 1
 		if DevMode >= DevLevel.FULL then
-			Log(LogLevel.INFO, Text.LOG_LINKED_PRESET, count, preset.Link)
+			Log(LogLevel.INFO, Text.LOG_LINK_PSET, count, preset.Link)
 		end
 		preset = _cameraPresets[preset.Link]
 		if preset and preset.Link and count < 8 then
@@ -1004,7 +1022,7 @@ local function applyPreset(preset, count)
 	end
 
 	if not preset or not preset.ID then
-		Log(LogLevel.ERROR, Text.LOG_FAILED_APPLY)
+		Log(LogLevel.ERROR, Text.LOG_FAIL_APPLY)
 		return
 	end
 
@@ -1029,7 +1047,7 @@ local function restoreAllPresets()
 	end
 	_modifiedPresets = {}
 
-	Log(LogLevel.INFO, Text.LOG_RESTORED_ALL_DEFAULTS)
+	Log(LogLevel.INFO, Text.LOG_REST_ALL)
 end
 
 ---Restores modified camera offset presets to their default values.
@@ -1042,14 +1060,14 @@ local function restoreModifiedPresets()
 	for _, preset in pairs(_cameraPresets) do
 		if preset.IsDefault and contains(changed, preset.ID) then
 			applyPreset(preset)
-			Log(LogLevel.INFO, Text.LOG_RESTORED_PRESET, preset.ID)
+			Log(LogLevel.INFO, Text.LOG_REST_PSET, preset.ID)
 			restored = restored + 1
 		end
 		if restored >= amount then break end
 	end
 	_modifiedPresets = {}
 
-	Log(LogLevel.INFO, Text.LOG_RESTORED_SOME_PRESETS, restored, amount)
+	Log(LogLevel.INFO, Text.LOG_REST_PSETS, restored, amount)
 end
 
 ---Validates whether the given camera offset preset is structurally valid.
@@ -1122,7 +1140,7 @@ end
 ---Clears all currently loaded camera offset presets.
 local function purgePresets()
 	_cameraPresets = {}
-	Log(LogLevel.WARN, Text.LOG_CLEARED_PRESETS)
+	Log(LogLevel.WARN, Text.LOG_CLEAR_PSETS)
 end
 
 ---Loads camera offset presets from `./defaults` (first) and `./presets` (second).
@@ -1133,7 +1151,7 @@ local function loadPresets(refresh)
 	local function loadFrom(path)
 		local files = dir("./" .. path)
 		if not files then
-			LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DIR_NOT_EXISTS, path)
+			LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DIR_NOT_EXIST, path)
 			return -1
 		end
 
@@ -1146,25 +1164,25 @@ local function loadPresets(refresh)
 			local key = trimLuaExt(name)
 			if _cameraPresets[key] then
 				count = count + 1
-				LogE(DevLevel.BASIC, LogLevel.WARN, Text.LOG_SKIPPED_PRESET, key, path, name)
+				LogE(DevLevel.BASIC, LogLevel.WARN, Text.LOG_SKIP_PSET, key, path, name)
 				goto continue
 			end
 
 			local chunk, err = loadfile(path .. "/" .. name)
 			if not chunk then
-				LogE(DevLevel.BASIC, LogLevel.ERROR, Text.LOG_FAILED_TO_LOAD_PRESET, path, name, err)
+				LogE(DevLevel.BASIC, LogLevel.ERROR, Text.LOG_FAIL_LOAD, path, name, err)
 				goto continue
 			end
 
 			local ok, result = pcall(chunk)
 			if not ok or (isDef and not result.IsDefault) or not setPresetEntry(key, result) then
-				LogE(DevLevel.BASIC, LogLevel.ERROR, Text.LOG_INVALID_PRESET, path, name)
+				LogE(DevLevel.BASIC, LogLevel.ERROR, Text.LOG_BAD_PSET, path, name)
 				goto continue
 			end
 
 			count = count + 1
 			if DevMode >= DevLevel.FULL then
-				Log(LogLevel.INFO, Text.LOG_LOADED_PRESET, key, path, name)
+				Log(LogLevel.INFO, Text.LOG_LOAD_PSET, key, path, name)
 			end
 
 			::continue::
@@ -1179,7 +1197,7 @@ local function loadPresets(refresh)
 
 	if loadFrom("defaults") < 38 then
 		_isEnabled = false
-		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DEFAULTS_INCOMPLETE)
+		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DEFS_INCOMP)
 		return
 	end
 
@@ -1201,7 +1219,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 		local check = io.open(path, "r")
 		if check then
 			check:close()
-			Log(LogLevel.WARN, Text.LOG_FILE_EXISTS, path)
+			Log(LogLevel.WARN, Text.LOG_FILE_EXIST, path)
 			return false
 		end
 	end
@@ -1231,12 +1249,12 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	end
 
 	if not save then
-		Log(LogLevel.WARN, Text.LOG_PRESET_NOT_CHANGED, name, default.ID)
+		Log(LogLevel.WARN, Text.LOG_PSET_NOT_CHANGED, name, default.ID)
 
 		if not saveAsDefault then
 			local ok = os.remove(path)
 			if ok then
-				LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_DELETE_SUCCESS, path)
+				LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_DEL_SUCCESS, path)
 			end
 			return ok and setPresetEntry(name)
 		end
@@ -1262,7 +1280,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	file:write(table.concat(parts))
 	file:close()
 
-	LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PRESET_SAVED, name)
+	LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PSET_SAVED, name)
 
 	return true
 end
@@ -1287,9 +1305,7 @@ end
 ---@param dr integer # Amount to add to the red channel.
 ---@return integer # The resulting adjusted color in 0xAARRGGBB format.
 local function adjustColor(col, da, db, dg, dr)
-	if not isNumber(col) or not isNumber(da) or not isNumber(db) or not isNumber(dg) or not isNumber(dr) then
-		return 0
-	end
+	if not isNumber(col, da, db, dg, dr) then return 0 end
 	local a = math.min(0xff, bit32.band(bit32.rshift(col, 24), 0xff) + da)
 	local b = math.min(0xff, bit32.band(bit32.rshift(col, 16), 0xff) + db)
 	local g = math.min(0xff, bit32.band(bit32.rshift(col, 8), 0xff) + dg)
@@ -1315,7 +1331,7 @@ end
 ---@param color integer # The base color in 0xAAGGBBRR format.
 ---@return integer # The number of style colors pushed (atm always 3). Returns 0 if arguments are invalid.
 local function pushStyleColors(idx, color)
-	if not isNumber(idx) or not isNumber(color) then return 0 end
+	if not isNumber(idx, color) then return 0 end
 	local hoveredIdx = idx + 1
 	local activeIdx = idx + 2
 	local base, hover, active = getThreeColorsFrom(idx, color)
@@ -1439,7 +1455,7 @@ end)
 --Display a simple GUI with some options.
 registerForEvent("onDraw", function()
 	--Main window begins
-	if not _isOverlayOpen or not ImGui.Begin(Text.GUI_TITLE, ImGuiWindowFlags.AlwaysAutoResize) then return end
+	if not _isOverlayOpen or not ImGui.Begin(Text.GUI_TITL, ImGuiWindowFlags.AlwaysAutoResize) then return end
 
 	--Minimum window width and height padding.
 	ImGui.Dummy(230, 4)
@@ -1450,19 +1466,19 @@ registerForEvent("onDraw", function()
 	--Checkbox to toggle mod functionality and handle enable/disable logic.
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
-	local isEnabled = ImGui.Checkbox(Text.GUI_MOD_TOGGLE, _isEnabled)
-	addTooltip(Text.GUI_MOD_TOGGLE_TOOLTIP)
+	local isEnabled = ImGui.Checkbox(Text.GUI_TGL_MOD, _isEnabled)
+	addTooltip(Text.GUI_TGL_MOD_TIP)
 	if isEnabled ~= _isEnabled then
 		_isEnabled = isEnabled
 		if isEnabled then
 			loadPresets()
 			applyPreset()
-			LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_MOD_ENABLED)
+			LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_MOD_ON)
 		else
 			_guiEditorPresetData = {}
 			restoreAllPresets()
 			purgePresets()
-			LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_MOD_DISABLED)
+			LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_MOD_OFF)
 
 			--Mod is disabled — nothing left to add.
 			ImGui.End()
@@ -1474,23 +1490,23 @@ registerForEvent("onDraw", function()
 	--The button that reloads all presets.
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
-	if ImGui.Button(Text.GUI_PRESETS_RELOAD, 192, 24) then
+	if ImGui.Button(Text.GUI_RLD_ALL, 192, 24) then
 		_guiEditorPresetData = {}
 		loadPresets(true)
 		restoreAllPresets()
 		applyPreset()
-		LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PRESETS_RELOADED)
+		LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PSETS_RLD)
 	end
-	addTooltip(Text.GUI_PRESETS_RELOAD_TOOLTIP)
+	addTooltip(Text.GUI_RLD_ALL_TIP)
 	ImGui.Dummy(0, 2)
 
 	--Slider to set the developer mode level.
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
 	ImGui.PushItemWidth(77)
-	DevMode = ImGui.SliderInt(Text.GUI_DEVMODE, DevMode, DevLevel.DISABLED, DevLevel.FULL)
+	DevMode = ImGui.SliderInt(Text.GUI_DMODE, DevMode, DevLevel.DISABLED, DevLevel.FULL)
 	_guiLockPadding = ImGui.IsItemActive()
-	addTooltip(Text.GUI_DEVMODE_TOOLTIP)
+	addTooltip(Text.GUI_DMODE_TIP)
 	ImGui.PopItemWidth()
 	ImGui.Dummy(0, 8)
 
@@ -1530,22 +1546,22 @@ registerForEvent("onDraw", function()
 
 	local editor = deep(_guiEditorPresetData, F("%s*%s", name, appName))
 	---@cast editor IEditorPresetData
-	if not editor.CName then
-		editor.CName = key
+	if not editor.CurName then
+		editor.CurName = key
 	end
 
 	if ImGui.BeginTable("InfoTable", 2, ImGuiTableFlags.Borders) then
-		ImGui.TableSetupColumn(Text.GUI_TABLE_HEADER_KEY, ImGuiTableColumnFlags.WidthFixed, -1)
-		ImGui.TableSetupColumn(Text.GUI_TABLE_HEADER_VALUE, ImGuiTableColumnFlags.WidthStretch)
+		ImGui.TableSetupColumn(Text.GUI_TBL_HEAD_KEY, ImGuiTableColumnFlags.WidthFixed, -1)
+		ImGui.TableSetupColumn(Text.GUI_TBL_HEAD_VAL, ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
-		local keyValue = (editor.CName ~= key or presetFileExists(editor.CName)) and editor.CName or id
+		local keyValue = (editor.CurName ~= key or presetFileExists(editor.CurName)) and editor.CurName or id
 		local dict = {
-			{ key = Text.GUI_TABLE_LABEL_VEHICLE,    value = name },
-			{ key = Text.GUI_TABLE_LABEL_APPEARANCE, value = appName },
-			{ key = Text.GUI_TABLE_LABEL_CAMERAID,   value = id },
-			{ key = Text.GUI_TABLE_LABEL_PRESET,     value = keyValue },
-			{ key = Text.GUI_TABLE_LABEL_IS_DEFAULT, value = key == nil and Text.GUI_TRUE or Text.GUI_FALSE }
+			{ key = Text.GUI_TBL_LABL_VEH,   value = name },
+			{ key = Text.GUI_TBL_LABL_APP,   value = appName },
+			{ key = Text.GUI_TBL_LABL_CAMID, value = id },
+			{ key = Text.GUI_TBL_LABL_PSET,  value = keyValue },
+			{ key = Text.GUI_TBL_LABL_ISDEF, value = key == nil and Text.GUI_TRUE or Text.GUI_FALSE }
 		}
 		for _, item in ipairs(dict) do
 			ImGui.TableNextRow()
@@ -1554,7 +1570,7 @@ registerForEvent("onDraw", function()
 
 			local text = item.value or Text.GUI_NONE
 			ImGui.TableSetColumnIndex(1)
-			if item.key == Text.GUI_TABLE_LABEL_PRESET then
+			if item.key == Text.GUI_TBL_LABL_PSET then
 				local value = text
 				local file = ensureLuaExt(value)
 
@@ -1565,11 +1581,11 @@ registerForEvent("onDraw", function()
 				local pushedStyles = isNotDefault and pushStyleColors(ImGuiCol.FrameBg, Colors.CUSTOM) or 0
 				local newValue, changed = ImGui.InputText("##Preset", file, 96)
 				if changed and newValue then
-					editor.CName = trimLuaExt(newValue)
+					editor.CurName = trimLuaExt(newValue)
 				end
 				popSyleColors(pushedStyles)
 				addTooltip(
-					F(Text.GUI_TABLE_VALUE_PRESET_TOOLTIP,
+					F(Text.GUI_TBL_VAL_PSET_TIP,
 						isNotDefault and file or ensureLuaExt(name),
 						name,
 						appName,
@@ -1588,7 +1604,7 @@ registerForEvent("onDraw", function()
 	--Camera preset editor allowing adjustments to Angle, X, Y, and Z coordinates — if certain conditions are met.
 	local preset = editor.Current or getPreset(id)
 	if not preset then
-		Log(LogLevel.WARN, Text.LOG_NO_PRESET_FOUND)
+		Log(LogLevel.WARN, Text.LOG_NO_PSET_FOUND)
 
 		--GUI closed — no further controls required.
 		ImGui.End()
@@ -1600,12 +1616,12 @@ registerForEvent("onDraw", function()
 
 		local copy = clone(preset)
 		editor.Origin = copy
-		editor.OHash = hash(copy)
+		editor.OrigToken = checksum(copy)
 
 		if editor.SavePending ~= true then
 			copy = clone(copy)
 			editor.Source = copy
-			editor.SHash = hash(copy)
+			editor.SrcToken = checksum(copy)
 		end
 
 		editor.Current = preset
@@ -1617,13 +1633,13 @@ registerForEvent("onDraw", function()
 			copy.IsDefault = nil
 
 			editor.Default = copy
-			editor.DHash = hash(copy)
+			editor.DefToken = checksum(copy)
 		end
 	end
 
 	local default = editor.Default
 	if not default then
-		Log(LogLevel.ERROR, Text.LOG_NO_DEFAULT_PRESET, id, name)
+		Log(LogLevel.ERROR, Text.LOG_NO_DEF_PSET, id, name)
 
 		--GUI ends early — default preset not found.
 		ImGui.End()
@@ -1632,11 +1648,11 @@ registerForEvent("onDraw", function()
 
 	if ImGui.BeginTable("CameraOffsetEditor", 5, ImGuiTableFlags.Borders) then
 		local labels = {
-			Text.GUI_TABLE_HEADER_LEVEL,
-			Text.GUI_TABLE_HEADER_ANGLE,
-			Text.GUI_TABLE_HEADER_X,
-			Text.GUI_TABLE_HEADER_Y,
-			Text.GUI_TABLE_HEADER_Z
+			Text.GUI_TBL_HEAD_LVL,
+			Text.GUI_TBL_HEAD_ANG,
+			Text.GUI_TBL_HEAD_X,
+			Text.GUI_TBL_HEAD_Y,
+			Text.GUI_TBL_HEAD_Z
 		}
 		for i, label in ipairs(labels) do
 			local flag = i < 3 and ImGuiTableColumnFlags.WidthFixed or ImGuiTableColumnFlags.WidthStretch
@@ -1646,10 +1662,10 @@ registerForEvent("onDraw", function()
 		ImGui.TableHeadersRow()
 
 		local tooltips = {
-			Text.GUI_TABLE_VALUE_ANGLE_TOOLTIP,
-			Text.GUI_TABLE_VALUE_X_TOOLTIP,
-			Text.GUI_TABLE_VALUE_Y_TOOLTIP,
-			Text.GUI_TABLE_VALUE_Z_TOOLTIP
+			Text.GUI_TBL_VAL_ANG_TIP,
+			Text.GUI_TBL_VAL_X_TIP,
+			Text.GUI_TBL_VAL_Y_TIP,
+			Text.GUI_TBL_VAL_Z_TIP
 		}
 		for _, level in ipairs(CAMERA_LEVELS) do
 			ImGui.TableNextRow()
@@ -1693,41 +1709,36 @@ registerForEvent("onDraw", function()
 	if editor.RefreshPending then
 		editor.RefreshPending = false
 		editor.Current = preset
-		editor.CHash = hash(editor.Current)
-		editor.ApplyPending = editor.CHash ~= editor.OHash
-		editor.SavePending = editor.CHash ~= editor.SHash
+		editor.CurToken = checksum(editor.Current)
+		editor.ApplyPending = editor.CurToken ~= editor.OrigToken
+		editor.SavePending = editor.CurToken ~= editor.SrcToken
 		if editor.SavePending then
-			editor.SaveIsRestore = editor.CHash == editor.DHash
+			editor.SaveIsRestore = editor.CurToken == editor.DefToken
 		end
 	end
-	key = validatePresetKey(name, appName, key or name, editor.CName)
-	if key ~= editor.CName then
-		editor.CName = key
+	key = validatePresetKey(name, appName, key or name, editor.CurName)
+	if key ~= editor.CurName then
+		editor.CurName = key
 	end
 
 	--Button to apply previously configured values in-game.
 	local color = editor.SaveIsRestore and Colors.RESTORE or Colors.CONFIRM
 	local pushedStyles = editor.ApplyPending and pushStyleColors(ImGuiCol.Button, color) or 0
-	if ImGui.Button(Text.GUI_PRESET_APPLY, contentWidth, 24) then
+	if ImGui.Button(Text.GUI_APPLY, contentWidth, 24) then
 		editor.RefreshPending = true
 		editor.ApplyPending = false
 		_cameraPresets[key] = preset
-		LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PRESET_UPDATED, key)
+		LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PSET_UPD, key)
 	end
 	popSyleColors(pushedStyles)
-	addTooltip(Text.GUI_PRESET_APPLY_TOOLTIP)
+	addTooltip(Text.GUI_APPLY_TIP)
 	ImGui.Dummy(0, 1)
 
 	--Button to save configured values to a file for future automatic use.
 	local overwritePopup = "ConfirmOverwrite_" .. key
 	local saveConfirmed = false
 	pushedStyles = editor.SavePending and pushStyleColors(ImGuiCol.Button, color) or 0
-	if ImGui.Button(Text.GUI_PRESET_SAVE, contentWidth, 24) then
-		_cameraPresets[key] = preset
-		editor.RefreshPending = true
-		editor.ApplyPending = false
-		Log(LogLevel.INFO, Text.LOG_PRESET_UPDATED, key)
-
+	if ImGui.Button(Text.GUI_SAVE, contentWidth, 24) then
 		if presetFileExists(key) then
 			_guiOverwriteConfirm = true
 			ImGui.OpenPopup(overwritePopup)
@@ -1736,10 +1747,10 @@ registerForEvent("onDraw", function()
 		end
 	end
 	popSyleColors(pushedStyles)
-	addTooltip(F(editor.SaveIsRestore and Text.GUI_PRESET_RESTORE_TOOLTIP or Text.GUI_PRESET_SAVE_TOOLTIP, key))
+	addTooltip(F(editor.SaveIsRestore and Text.GUI_REST_TIP or Text.GUI_SAVE_TIP, key))
 
 	if _guiOverwriteConfirm then
-		local confirmed = addPopupYesNo(overwritePopup, F(Text.GUI_OVERWRITE_CONFIRM, key), Colors.CONFIRM)
+		local confirmed = addPopupYesNo(overwritePopup, F(Text.GUI_OVWR_CONFIRM, key), Colors.CONFIRM)
 		if confirmed ~= nil then
 			_guiOverwriteConfirm = false
 			saveConfirmed = confirmed
@@ -1747,10 +1758,16 @@ registerForEvent("onDraw", function()
 	end
 	if saveConfirmed then
 		saveConfirmed = false
+
+		_cameraPresets[key] = preset
+		editor.RefreshPending = true
+		editor.ApplyPending = false
+		Log(LogLevel.INFO, Text.LOG_PSET_UPD, key)
+
 		if savePreset(key, preset, true) then
 			editor.SavePending = false
 		else
-			LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_PRESET_NOT_SAVED, key)
+			LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_PSET_NOT_SAVED, key)
 		end
 	end
 
@@ -1760,7 +1777,7 @@ registerForEvent("onDraw", function()
 	local x, y, w, h
 	ImGui.Separator()
 	ImGui.Dummy(0, 4)
-	if ImGui.Button(Text.GUI_PRESET_MANAGER, contentWidth, 24) then
+	if ImGui.Button(Text.GUI_OPEN_FMAN, contentWidth, 24) then
 		x, y = ImGui.GetWindowPos()
 		w, h = ImGui.GetWindowSize()
 		_guiFileManToggle = not _guiFileManToggle
@@ -1776,7 +1793,7 @@ registerForEvent("onDraw", function()
 	local files = dir("./presets")
 	if not files then
 		_guiFileManToggle = false
-		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DIR_NOT_EXISTS, "presets")
+		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DIR_NOT_EXIST, "presets")
 		return
 	end
 
@@ -1791,8 +1808,8 @@ registerForEvent("onDraw", function()
 
 	local anyFiles = false
 	if ImGui.BeginTable("PresetFilesTable", 2, ImGuiTableFlags.Borders) then
-		ImGui.TableSetupColumn(Text.GUI_FMAN_HEADER_NAME, ImGuiTableColumnFlags.WidthStretch)
-		ImGui.TableSetupColumn(Text.GUI_FMAN_HEADER_ACTIONS, ImGuiTableColumnFlags.WidthFixed)
+		ImGui.TableSetupColumn(Text.GUI_FMAN_HEAD_NAME, ImGuiTableColumnFlags.WidthStretch)
+		ImGui.TableSetupColumn(Text.GUI_FMAN_HEAD_ACTION, ImGuiTableColumnFlags.WidthFixed)
 		ImGui.TableHeadersRow()
 
 		for _, f in ipairs(files) do
@@ -1821,11 +1838,11 @@ registerForEvent("onDraw", function()
 
 			ImGui.TableSetColumnIndex(1)
 			local popup = "ConfirmDelete_" .. file
-			if ImGui.Button(F(Text.GUI_FMAN_DELETE_BUTTON, file)) then
+			if ImGui.Button(F(Text.GUI_FMAN_DEL_BTN, file)) then
 				ImGui.OpenPopup(popup)
 			end
 
-			if addPopupYesNo(popup, F(Text.GUI_FMAN_DELETE_CONFIRM, file), Colors.DELETE) then
+			if addPopupYesNo(popup, F(Text.GUI_FMAN_DEL_CONFIRM, file), Colors.DELETE) then
 				local ok = os.remove("presets/" .. file)
 				if ok then
 					local k = trimLuaExt(file)
@@ -1841,9 +1858,9 @@ registerForEvent("onDraw", function()
 						::continue::
 					end
 					setPresetEntry(k)
-					LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_DELETE_SUCCESS, file)
+					LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_DEL_SUCCESS, file)
 				else
-					LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_DELETE_FAILURE, file)
+					LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_DEL_FAILURE, file)
 				end
 			end
 
@@ -1858,7 +1875,7 @@ registerForEvent("onDraw", function()
 		ImGui.Dummy(controlPadding - 4, 0)
 		ImGui.SameLine()
 		ImGui.PushStyleColor(ImGuiCol.Text, 0xff6060dd)
-		ImGui.Text(Text.GUI_FMAN_NO_PRESETS)
+		ImGui.Text(Text.GUI_FMAN_NO_PSETS)
 		ImGui.PopStyleColor()
 	end
 
