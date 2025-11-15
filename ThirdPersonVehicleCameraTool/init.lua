@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-11-02, 16:19 UTC+01:00 (MEZ)
+Version: 2025-11-10, 17:09 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -687,8 +687,11 @@ local state = {
 	---Indicates whether the running CET version supports all required features.
 	isCetTopical = false,
 
-	---Determines whether Codeware is installed.
-	isCodewareAvailable = false
+	---Determines whether `Codeware` is installed.
+	isCodewareAvailable = false,
+
+	---Determines whether `FovControl` is installed.
+	isFovControlAvailable = false
 }
 
 ---Manages recurring asynchronous timers and their status.
@@ -750,8 +753,8 @@ local config = {
 			Description = Text.GUI_GSET_FOV_DESC,
 			Tooltip = Text.GUI_GSET_FOV_TIP,
 			Default = DefaultParams.Vars.fov.Default,
-			Min = 30,
-			Max = 120,
+			Min = 1, --Real minimum: 0.338
+			Max = 172, --Real maximum: 172.186
 			Speed = 1,
 			IsGameOption = true
 		},
@@ -1147,6 +1150,20 @@ local function areNumeric(...)
 		end
 	end
 	return true
+end
+
+---Rounds a floating-point number to a specified number of decimal places.
+---Includes a small epsilon correction (1e-9) to mitigate floating-point inaccuracies.
+---@param value number # The numeric value to round.
+---@param digits number? # Optional number of decimal digits to keep. Defaults to 0 if omitted or invalid.
+---@return number # The rounded numeric value.
+local function roundF(value, digits)
+	if not isNumber(value) then return 0 end
+	digits = isNumber(digits) and digits or 0
+	local factor = 10 ^ abs(digits)
+	local scaled = value * factor
+	local result = (scaled >= 0) and floor(scaled + 0.5) or ceil(scaled - 0.5)
+	return result / factor
 end
 
 ---Returns a string format pattern for representing numeric values with adaptive precision.
@@ -1629,17 +1646,6 @@ end
 ---@return any # The element at index i if values is a table, otherwise values itself.
 local function pluck(x, i)
 	return isTable(x) and x[i] or x
-end
-
----Ensures the input is returned as a table.
----If the input is already a table, it is returned as-is.
----If the input is nil, returns an empty table.
----Otherwise, wraps the input in a new table.
----@param x any? # The value to cast into a table.
----@return table # The resulting table.
-local function tabular(x)
-	if x == nil then return {} end
-	return isTable(x) and x or { x }
 end
 
 ---Converts any value to a readable string representation.
@@ -2201,6 +2207,32 @@ local function getUserSettingsCameraHeight()
 	return isTableValid(settings) and settings.Value or nil
 end
 
+---Enables or disables the near-distance auto-hide feature used by the game's culling system.
+---When enabled, nearby objects outside the player's view are hidden sooner to improve performance.
+---@param enable boolean # True to enable near-distance auto-hide, false to disable it.
+local function autoHideDistanceNear(enable)
+	---@diagnostic disable-next-line: undefined-global
+	GameOptions.SetBool("Streaming/Culling/AutoHideDistanceNear", "Enabled", enable)
+end
+
+---Converts the FOV value between internal and settings formats, applying fallback logic when FovControl is unavailable.
+---If `FovControl` is missing, returns the value directly (rounded if not in settings format).
+---@param value number # The FOV value to convert.
+---@param isSettingsFormat boolean? # True to convert from internal to settings format, false to convert from settings to internal.
+---@return number # The converted FOV value, rounded if appropriate.
+local function changeFovFormat(value, isSettingsFormat)
+	if not state.isFovControlAvailable then
+		return isSettingsFormat and value or roundF(value)
+	end
+	--Ensures that 101 maps back to the internal default 69.
+	if isSettingsFormat and value == 101 then
+		return 69
+	end
+	---@diagnostic disable-next-line: undefined-global
+	local fov = FovControl.ConvertFormat(value or 0, isSettingsFormat)
+	return isSettingsFormat and fov or roundF(fov)
+end
+
 --#endregion
 
 --#region 🚗 Vehicle Metadata
@@ -2759,6 +2791,10 @@ local function updateConfigDefaultParam(name, value, updateConfig)
 	if not state.isCodewareAvailable then return end
 
 	local isFOV = name == "fov"
+	if isFOV then
+		autoHideDistanceNear(value <= 80)
+	end
+
 	local player = (isFOV or name == "zoom") and Game.GetPlayer()
 	local component = player and player:FindComponentByType("vehicleTPPCameraComponent")
 	if not component then return end
@@ -4741,6 +4777,7 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 		ImGui.Text(tostring(option.DisplayName or key))
 
 		ImGui.TableNextColumn()
+		local isFov = key == "fov"
 		local current = option.Value
 		local items = option.Values
 		local label = "##" .. key
@@ -4767,11 +4804,19 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 			end
 			addTooltip(scale, option.Tooltip)
 		elseif isNumber(current) then ---@cast current number
+			local default = option.Default ---@cast default number
 			local min = option.Min ---@cast min number
 			local max = option.Max ---@cast max number
 			if not areNumber(min, max) then
 				min = -math.huge
 				max = math.huge
+			end
+
+			if isFov then
+				default = changeFovFormat(default)
+				current = changeFovFormat(current)
+				min = changeFovFormat(min)
+				max = changeFovFormat(max)
 			end
 
 			local speed = option.Speed or 0.01
@@ -4783,15 +4828,19 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 				changed = true
 			end
 
-			addTooltip(nil, split(format(option.Tooltip, option.Default, min, max), "|"))
+			addTooltip(nil, split(format(option.Tooltip, default, min, max), "|"))
 		else
 			ImGui.Text(Text.GUI_UNKNOWN)
 		end
 
 		if changed then
-			updateConfigDefaultParam(key, recent, true)
 			if config.nativeInstance and config.nativeOptions[key] then
 				config.nativeInstance.setOption(config.nativeOptions[key], recent)
+			else
+				if isFov then ---@cast recent number
+					recent = changeFovFormat(recent, true)
+				end
+				updateConfigDefaultParam(key, recent, true)
 			end
 		end
 
@@ -4813,9 +4862,14 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 
 	if ImGui.Button(Text.GUI_GSET_RESET, buttonWidth, buttonHeight) then
 		for key, option in pairs(config.options) do
-			updateConfigDefaultParam(key, option.Default, true)
+			local default = option.Default
 			if config.nativeInstance and config.nativeOptions[key] then
-				config.nativeInstance.setOption(config.nativeOptions[key], option.Default)
+				if key == "fov" then ---@cast default number
+					default = changeFovFormat(default)
+				end
+				config.nativeInstance.setOption(config.nativeOptions[key], default)
+			else
+				updateConfigDefaultParam(key, default, true)
 			end
 		end
 	end
@@ -5271,6 +5325,8 @@ local function onUnmount(force)
 
 	resetCache()
 	presets.isAnyActive = false
+
+	autoHideDistanceNear(true)
 end
 
 ---Handles logic when the game or CET shuts down.
@@ -5349,12 +5405,16 @@ registerForEvent("onInit", function()
 	state.isCetCompatible = isVersionAtLeast(state.cetVersion, "1.35")
 	state.isCetTopical = isVersionAtLeast(state.cetVersion, "1.35.1")
 
-	--Codeware dependencies.
+	--Codeware dependence.
 	---@diagnostic disable-next-line: undefined-global
 	state.isCodewareAvailable = isUserdata(Codeware)
 	if not state.isCodewareAvailable then
 		deep(config.options, "zoom").IsNotAvailable = false
 	end
+
+	--FovControl dependence.
+	---@diagnostic disable-next-line: undefined-global
+	state.isFovControlAvailable = isUserdata(FovControl)
 
 	--Ensures the log file is fresh when the mod initializes.
 	pcall(function()
@@ -5377,8 +5437,15 @@ registerForEvent("onInit", function()
 	local settings = getUserSettingsOption("/graphics/basic", "FieldOfView")
 	if isTableValid(settings) then
 		local fov = deep(config.options, "fov")
-		fov.Min = math.max(fov.Min, floor(settings.MinValue / 3.5))
-		fov.Max = math.min(fov.Max, settings.MaxValue + 10)
+		local min = settings.MinValue ---@cast min number
+		local max = settings.MaxValue ---@cast max number
+		if state.isFovControlAvailable then
+			fov.Min = changeFovFormat(min, true)
+			fov.Max = changeFovFormat(max, true)
+		else
+			fov.Min = math.min(30, math.max(fov.Min, min / 3.5))
+			fov.Max = math.max(120, math.min(fov.Max, max + 10))
+		end
 	end
 
 	--When the player enters a vehicle. This event also fires
@@ -5392,6 +5459,11 @@ registerForEvent("onInit", function()
 		updateAdvancedConfigDefaultParams()
 		updateConfigDefaultParams()
 		applyPreset()
+		asyncOnce(1, function()
+			if deep(config.options, "fov").Value > 80 then
+				autoHideDistanceNear(false)
+			end
+		end)
 	end)
 
 	--When the player unmounts from a vehicle, reset to default camera offsets.
@@ -5521,7 +5593,7 @@ registerForEvent("onInit", function()
 	}
 	for handler, events in pairs(menuObservers) do
 		for event, scenarios in pairs(events) do
-			scenarios = tabular(scenarios)
+			scenarios = isTable(scenarios) and scenarios or { scenarios } ---@cast scenarios table
 			for _, scenario in ipairs(scenarios) do
 				Observe(scenario, event, handler)
 			end
@@ -5549,16 +5621,15 @@ registerForEvent("onInit", function()
 			if pendingSaves[advanced] then return end
 
 			pendingSaves[advanced] = true
-			asyncRepeat(3, function(id)
-				if nilOrEmpty(native.currentTab) then
-					asyncStop(id)
-					pendingSaves[advanced] = false
-					if advanced == 0 then
-						saveGlobalOptions()
-					else
-						config.isAdvancedUnsaved = true
-						saveAdvancedOptions()
-					end
+			asyncRepeat(1, function(id)
+				if gui.isOverlayOpen or not nilOrEmpty(native.currentTab) then return end
+				asyncStop(id)
+				pendingSaves[advanced] = false
+				if advanced == 0 then
+					saveGlobalOptions()
+				else
+					config.isAdvancedUnsaved = true
+					saveAdvancedOptions()
 				end
 			end)
 		end
@@ -5616,18 +5687,33 @@ registerForEvent("onInit", function()
 
 		for key, option in opairs(config.options, "DisplayName") do
 			if not option.IsNotAvailable then
+				local def = option.Default
+				local cur = option.Value
+				local min = option.Min
+				local max = option.Max
+
+				local isFov = key == "fov"
+				if isFov and areNumber(def, cur, min, max) then
+					def = changeFovFormat(def)
+					cur = changeFovFormat(cur)
+					min = changeFovFormat(min)
+					max = changeFovFormat(max)
+				end
 				addOption(
 					key,
 					cat,
 					option.DisplayName,
 					option.Description or option.Tooltip,
-					option.Default,
-					option.Value,
-					option.Min,
-					option.Max,
+					def,
+					cur,
+					min,
+					max,
 					option.Speed,
 					option.Values,
 					function(value)
+						if isFov and state.isFovControlAvailable and isNumber(value) then
+							value = changeFovFormat(value, true)
+						end
 						updateConfigDefaultParam(key, value, true)
 						saveToFile()
 					end
