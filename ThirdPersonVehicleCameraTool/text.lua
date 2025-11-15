@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-06-12, 11:59 UTC+01:00 (MEZ)
+Version: 2025-07-20, 20:58 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -111,15 +111,16 @@ return {
 	LOG_DEFS_INCOMP = "The default presets are incomplete.",
 	LOG_DEL_FAILURE = "Failed to delete preset '%s'. %s",
 	LOG_DIR_NOT_EXIST = "You cannot delete the entire directory under '%s'.",
+	LOG_INV_RECID = "Vehicle record ID is inavlid: '%s'.",
 	LOG_FAIL_APPLY = "Could not apply preset: incomplete parameters ('%s').",
 	LOG_FAIL_LOAD = "Failed to load preset '%s/%s': '%s'.",
 	LOG_MOVE_FAILURE = "Failed to rename preset '%s' to '%s'. %s",
 	LOG_NO_APP = "The vehicle's appearance could not be found.",
 	LOG_NO_CAM_OSET = "Could not retrieve camera offset: '%s'.",
-	LOG_NO_ID = "Vehicle camera ID missing.",
+	LOG_NO_ID = "Vehicle camera ID is missing.",
 	LOG_NO_KEY = "Unable to define the vehicle's preset key.",
 	LOG_NO_NAME = "Vehicle name not found.",
 	LOG_NO_PSET_FOR_LVL = "No preset provided for level '%s'.",
-	LOG_NO_RECID = "Vehicle record ID missing.",
-	LOG_NO_RECN = "Vehicle record name missing."
+	LOG_NO_RECID = "Vehicle record ID is missing.",
+	LOG_NO_RECN = "Vehicle record name is missing."
 }

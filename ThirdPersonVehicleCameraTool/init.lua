@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-06-12, 11:59 UTC+01:00 (MEZ)
+Version: 2025-07-20, 21:02 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -181,6 +181,32 @@ local PresetOffsets = {
 	"x",
 	"y",
 	"z"
+}
+
+---Workaround for incomplete TweakDB vehicle records in CET.
+---Maps vehicle hash IDs to their full string record paths.
+---Used to resolve missing or broken references returned by certain CET calls.
+---@type table<integer, string>
+local VehicleLookup = {
+	[0xA9DF11A2] = "Vehicle.v_sport1_rayfield_caliburn_mordred_player",
+	[0x88EC1B03] = "Vehicle.v_sport1_yaiba_semimaru_player",
+	[0x893F3A49] = "Vehicle.v_sportbike1_yaiba_muramasa_naked",
+	[0xC1CF8F7D] = "Vehicle.v_sportbike1_yaiba_muramasa_naked_as",
+	[0x363D46C1] = "Vehicle.v_sportbike1_yaiba_muramasa_naked_as_nr",
+	[0x413A7657] = "Vehicle.v_sportbike1_yaiba_muramasa_naked_as_ns",
+	[0x0B4ED910] = "Vehicle.v_sportbike1_yaiba_muramasa_naked_as_ns_nr",
+	[0x3150A324] = "Vehicle.v_sportbike1_yaiba_muramasa_naked_nr",
+	[0x465793B2] = "Vehicle.v_sportbike1_yaiba_muramasa_naked_ns",
+	[0xB46DD110] = "Vehicle.v_sportbike1_yaiba_muramasa_naked_ns_nr",
+	[0xC496A342] = "Vehicle.v_sportbike1_yaiba_muramasa_regular",
+	[0xC2134ACE] = "Vehicle.v_sportbike1_yaiba_muramasa_regular_as",
+	[0xC8CDBB7F] = "Vehicle.v_sportbike1_yaiba_muramasa_regular_as_nr",
+	[0xBFCA8BE9] = "Vehicle.v_sportbike1_yaiba_muramasa_regular_as_ns",
+	[0xD8216718] = "Vehicle.v_sportbike1_yaiba_muramasa_regular_as_ns_nr",
+	[0x328C6697] = "Vehicle.v_sportbike1_yaiba_muramasa_regular_nr",
+	[0x458B5601] = "Vehicle.v_sportbike1_yaiba_muramasa_regular_ns",
+	[0x4A9D2CAE] = "Vehicle.v_sportbike1_yaiba_muramasa_regular_ns_nr",
+	[0x1728CA71] = "Vehicle.v_utility4_chevalier_legatus_player"
 }
 
 ---Determines whether the mod is enabled.
@@ -591,6 +617,11 @@ end
 local function contains(x, v)
 	if x == nil or v == nil then return false end
 	if x == v then return true end
+
+	if isUserdata(x) then
+		local s = tostring(x)
+		return contains(s, v)
+	end
 
 	if areNumeric(x, v) then
 		local xs, vs = tostring(x), tostring(v)
@@ -1139,7 +1170,18 @@ local function getVehicleCameraKeys()
 		return nil
 	end
 
-	local vname = getRecordName(vid)
+	local lup
+	if not contains(vid, "--[[") or not contains(vid, "--]]") then
+		lup = vid.hash and VehicleLookup[vid.hash] or nil
+		if not lup then
+			if dev_mode >= DevLevels.ALERT then
+				log(LogLevels.ERROR, 0xe98c, Text.LOG_INV_RECID, vid)
+			end
+			return nil
+		end
+	end
+
+	local vname = lup and lup or getRecordName(vid)
 	if not vname then
 		if dev_mode >= DevLevels.ALERT then
 			log(LogLevels.ERROR, 0xe98c, Text.LOG_NO_RECN)
@@ -1315,7 +1357,8 @@ local function getVehicleName()
 	local tid = vehicle:GetTDBID()
 	if not tid then return nil end
 
-	local str = TDBID.ToStringDEBUG(tid)
+	local lup = tid.hash and VehicleLookup[tid.hash] or nil
+	local str = lup and lup or TDBID.ToStringDEBUG(tid)
 	if not str then return nil end
 
 	local result = str:gsub("^Vehicle%.", "")
@@ -2648,7 +2691,7 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 	local files = dir("presets")
 	if not files then
 		file_man_open = false
-		logF(DevLevels.FULL, LogLevels.ERROR, 0xcb3d, Text.LOG_DIR_NOT_EXIST, "presets")
+		logF(DevLevels.FULL, LogLevels.ERROR, 0x970b, Text.LOG_DIR_NOT_EXIST, "presets")
 		return
 	end
 
@@ -2785,9 +2828,9 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 
 					savePresetUsage()
 
-					logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_DEL_SUCCESS, f)
+					logF(DevLevels.ALERT, LogLevels.INFO, 0x970b, Text.LOG_DEL_SUCCESS, f)
 				else
-					logF(DevLevels.FULL, LogLevels.WARN, 0xcb3d, Text.LOG_DEL_FAILURE, f, err)
+					logF(DevLevels.FULL, LogLevels.WARN, 0x970b, Text.LOG_DEL_FAILURE, f, err)
 				end
 			end
 
@@ -3104,6 +3147,7 @@ registerForEvent("onDraw", function()
 			id = getVehicleCameraID()
 			if not id then
 				log(LogLevels.ERROR, 0xcb3d, Text.LOG_NO_ID)
+				addText(Text.LOG_NO_ID, Colors.GARNET, halfHeightPadding, contentWidth, itemSpacing)
 			end
 			return id
 		end,

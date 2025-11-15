@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-05-11, 12:40 UTC+01:00 (MEZ)
+Version: 2025-07-20, 20:58 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -144,6 +144,7 @@ TweakDB = TweakDB
 
 ---Represents a TweakDB ID used to reference records in the game database.
 ---@class TDBID
+---@field hash number # The hash number.
 ---@field ToStringDEBUG fun(id: TDBID): string? # Converts a TDBID to a readable string, typically starting with a namespace like "Vehicle.".
 TDBID = TDBID
 
