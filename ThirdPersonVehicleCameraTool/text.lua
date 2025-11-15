@@ -1,7 +1,10 @@
 return {
 	--GUI: General
+	GUI_TRUE = "True",
+	GUI_FALSE = "False",
 	GUI_YES = "Yes",
 	GUI_NO = "No",
+	GUI_NONE = "None",
 
 	--GUI: Main Controls
 	GUI_TITLE = "Third-Person Vehicle Camera Tool",
@@ -37,7 +40,7 @@ return {
 	GUI_TABLE_LABEL_IS_DEFAULT = "Is Default",
 
 	--GUI: Table Values
-	GUI_TABLE_VALUE_PRESET_TOOLTIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of Vehicle or Appearance, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.\n\n\nMatching Priorities:\n\n1. Vehicle Name\n2. Appearance Name\n3. Prefix of Vehicle Name\n4. Prefix of Appearance Name",
+	GUI_TABLE_VALUE_PRESET_TOOLTIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of Vehicle or Appearance, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.\n\n\nMatching Priorities (only the first match is loaded):\n\n1. Vehicle: (e.g. \"%s.lua\")\n2. Appearance (e.g. \"%s.lua\")\n3. Prefix of Vehicle: (e.g. \"%s.lua\")\n4. Prefix of Appearance: (e.g. \"%s.lua\")\n\n\nPlease ensure that your new preset name has the correct priority, otherwise, you will need to delete the one that will steal its priority. Take a look at the Preset File Manager to delete presets.",
 	GUI_TABLE_VALUE_ANGLE_TOOLTIP = "Min: %s\nMax: %s",
 	GUI_TABLE_VALUE_X_TOOLTIP = "Min: %s\nMax: %s\n\nIncrease: Right\nDecrease: Left",
 	GUI_TABLE_VALUE_Y_TOOLTIP = "Min: %s\nMax: %s\n\nIncrease: Closer\nDecrease: Farther",

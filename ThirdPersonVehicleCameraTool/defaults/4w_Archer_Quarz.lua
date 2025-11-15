@@ -1,0 +1,1 @@
+return{ID="4w_Archer_Quarz",Close={a=11,x=0,y=0.5,z=1.25},Medium={a=11,x=0,y=0.5,z=1.65},Far={a=11,x=0,y=0.5,z=2.35}}
