@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-09-02, 18:45 UTC+01:00 (MEZ)
+Version: 2025-09-07, 20:09 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -20,7 +20,7 @@ ______________________________________________
 --#region 🚧 Core Definitions
 
 ---Represents available developer debug modes used to control logging and feedback behavior.
----@alias DevLevelType 0|1|2|3
+---@alias DevLevelType 0|1|2|3|4
 
 ---Represents available logging levels for categorizing message severity.
 ---@alias LogLevelType 0|1|2
@@ -28,9 +28,10 @@ ______________________________________________
 ---Enumeration of developer debug modes with increasing verbosity.
 ---@class DevLevelEnum
 ---@field DISABLED DevLevelType # No debug output (default).
----@field BASIC DevLevelType # Output is printed to console only.
----@field ALERT DevLevelType # Output is printed and shown as in-game alerts.
----@field FULL DevLevelType # Output is printed, alerted, and written to the log file.
+---@field BASIC DevLevelType # Logs output to the CET console only.
+---@field OVERLAY DevLevelType # Logs to console and keeps the overlay visible even when CET is hidden.
+---@field ALERT DevLevelType # Same as OVERLAY, but also shows pop-up alerts on screen.
+---@field FULL DevLevelType # Same as ALERT, but with extended technical output and additional logging to file.
 
 ---Enumeration of log message severity levels.
 ---@class LogLevelEnum
@@ -136,8 +137,9 @@ local Text = dofile("text.lua")
 local DevLevels = {
 	DISABLED = 0,
 	BASIC = 1,
-	ALERT = 2,
-	FULL = 3
+	OVERLAY = 2,
+	ALERT = 3,
+	FULL = 4
 }
 
 ---Log levels used to classify the severity of log messages.
@@ -1608,6 +1610,11 @@ local function setCameraLookAtOffset(preset, path, x, y, z)
 	local fallback = getCameraLookAtOffset(preset, path)
 	if not fallback then return end
 
+	--Adjust combat camera.
+	if contains(path, "DriverCombat") then
+		z = z + 0.5
+	end
+
 	local value = Vector3.new(x or fallback.x, y or fallback.y, z or fallback.z)
 	if equals(value, fallback) then return end
 
@@ -1645,6 +1652,11 @@ local function setCameraBoomLengthOffset(preset, path, value)
 
 	local key, isCustom = getCameraTweakKey(preset, path, "boomLengthOffset")
 	if not key then return end
+
+	--Adjust combat camera.
+	if contains(path, "DriverCombat") then
+		value = value + 0.5
+	end
 
 	local fallback = getCameraBoomLengthOffset(preset, path)
 	if not fallback or equals(value, fallback) then return end
@@ -1712,7 +1724,7 @@ local function resetCustomCameraParams(key)
 
 			TweakDB:SetFlat(path, ref)
 
-			logF(DevLevels.ALERT, LogLevels.INFO, 0x460a, Text.LOG_PARAM_MANIP, path, val, ref)
+			logF(DevLevels.BASIC, LogLevels.INFO, 0x460a, Text.LOG_PARAM_MANIP, path, val, ref)
 		end
 
 		::continue::
@@ -2287,7 +2299,7 @@ end
 
 ---Saves the `preset_usage` table to `.usage` on disk.
 local function savePresetUsage()
-	if not isTable(preset_usage) then return end
+	if not isTableValid(preset_usage) then return end
 
 	local path = ".usage"
 	if nilOrEmpty(preset_usage) then
@@ -2297,21 +2309,10 @@ local function savePresetUsage()
 		return
 	end
 
-	local parts = { "return{" }
-	for k, v in opairs(preset_usage) do
-		local key = k:match("^[A-Za-z_][A-Za-z0-9_]*$") ~= nil and k or format("[%q]", k)
-		insert(parts, format("%s={First=%d,Last=%d,Total=%d},", key, v.First, v.Last, v.Total))
-	end
-	local last = parts[#parts]
-	if last and last:sub(-1) == "," then
-		parts[#parts] = last:sub(1, -2)
-	end
-	insert(parts, "}")
-
 	local file = io.open(path, "w")
 	if not file then return end
 
-	file:write(concat(parts))
+	file:write("return" .. serialize(preset_usage))
 	file:close()
 end
 
@@ -3401,10 +3402,14 @@ registerForEvent("onDraw", function()
 	end
 
 	--Stop when CET overlay is hidden.
-	if not overlay_open then return end
+	if not overlay_open and dev_mode < DevLevels.OVERLAY then return end
 
 	--Main window begins.
-	if not ImGui.Begin(Text.GUI_TITL, ImGuiWindowFlags.AlwaysAutoResize) then return end
+	local flags = ImGuiWindowFlags.AlwaysAutoResize
+	if not overlay_open then
+		flags = bit32.bor(flags, ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoNavInputs)
+	end
+	if not ImGui.Begin(Text.GUI_TITL, flags) then return end
 
 	local locked = overlay_locked
 	if locked then
