@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-07-20, 21:02 UTC+01:00 (MEZ)
+Version: 2025-08-27, 17:38 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -52,6 +52,14 @@ ______________________________________________
 ---@field Minor number # Minor version number (optional, defaults to 0 if missing).
 ---@field Build number # Build number (optional, defaults to 0 if missing).
 ---@field Revision number # Revision number (optional, defaults to 0 if missing).
+
+---Represents a default parameter structure.
+---@class IDefaultParamData
+---@field DisplayName string # The display name.
+---@field Value any # The current value.
+---@field Default any # The game's default value.
+---@field Min number? # The minimum value.
+---@field Max number? # The maximum value.
 
 ---Represents a camera offset configuration with rotation and positional data.
 ---@class IOffsetData
@@ -183,7 +191,7 @@ local PresetOffsets = {
 	"z"
 }
 
----Workaround for incomplete TweakDB vehicle records in CET.
+---Patch 2.3 workaround for incomplete TweakDB vehicle records in CET.
 ---Maps vehicle hash IDs to their full string record paths.
 ---Used to resolve missing or broken references returned by certain CET calls.
 ---@type table<integer, string>
@@ -285,6 +293,28 @@ local padding_width = 0
 ---@type boolean
 local padding_locked = false
 
+---Global default parameter base keys.
+---@type string[]
+local global_param_keys = {
+	"Camera.VehicleTPP_DefaultParams",
+	"Camera.VehicleTPP_2w_DefaultParams"
+}
+
+---Global default parameter data.
+---@type table<string, IDefaultParamData>
+local global_params = {
+	fov = {
+		DisplayName = Text.GUI_GOPT_FOV,
+		Default = 69,
+		Min = 10,
+		Max = 150
+	},
+	lockedCamera = {
+		DisplayName = Text.GUI_GOPT_LC,
+		Default = false
+	}
+}
+
 ---Stores original custom parameter values before resetting them to global defaults.
 ---Keys are TweakDB paths (string), and values are the original values.
 ---Allows potential restoration of vehicle-specific parameters on shutdown.
@@ -320,6 +350,10 @@ local editor_last_bundle = nil
 ---Determines whether overwriting the preset file is allowed.
 ---@type boolean
 local overwrite_confirm = false
+
+---Determines whether the Global Parameters window is open.
+---@type boolean
+local global_options_open = false
 
 ---Determines whether the Preset File Manager is open.
 ---@type boolean
@@ -1331,8 +1365,13 @@ local function getVehicleCameraMap()
 		local distanceName = getRecordName(distance)
 		if not distanceName then goto continue end
 
-		local key = format("%s_%s", heightName, distanceName)
-		map[key] = v
+		--Workaround for mislabeled Low/High YAML tweaks.
+		local search = ({ Low = "_high", High = "_low" })[heightName]
+		if search and contains(v:lower(), search) then
+			heightName = heightName == "Low" and "High" or "Low"
+		end
+
+		map[format("%s_%s", heightName, distanceName)] = v
 
 		::continue::
 	end
@@ -1387,6 +1426,53 @@ end
 
 --#region 🧬 Tweak Accessors
 
+---Update the global default parameter values in TweakDB.
+---Iterates over all entries in `global_params` and applies clamping,
+---default assignment, type coercion and optional restoring.
+---@param restore boolean? # If true, values are reset to their default.
+local function updateDefaultParams(restore)
+	if not areTableValid(global_param_keys, global_params) then return end
+
+	for varName, data in pairs(global_params) do
+		for _, baseKey in ipairs(global_param_keys) do
+			local key = baseKey .. "." .. varName
+			local value = TweakDB:GetFlat(key)
+			if value == nil then goto continue end
+
+			local isNum = isNumber(value)
+			local hasMinMax = areNumber(data.Min, data.Max)
+			if isNum and hasMinMax then
+				value = min(max(value, data.Min), data.Max)
+			end
+
+			if data.Default == nil then data.Default = value end
+
+			if data.Value == nil then data.Value = value end
+
+			if type(value) ~= type(data.Value) then
+				data.Value = isNum and (data.Value and 1 or 0) or ((data.Value or 0) > 0)
+			end
+
+			if restore then
+				if value ~= data.Default then
+					TweakDB:SetFlat(key, data.Default)
+				end
+				goto continue
+			end
+
+			if value == data.Value then goto continue end
+
+			if isNum and hasMinMax then
+				TweakDB:SetFlat(key, min(max(data.Value, data.Min), data.Max))
+			else
+				TweakDB:SetFlat(key, data.Value)
+			end
+
+			::continue::
+		end
+	end
+end
+
 ---Returns a formatted TweakDB record key for accessing vehicle camera data.
 ---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera level path (e.g. "High_Close").
@@ -1426,7 +1512,7 @@ end
 local function getCameraDefaultRotationPitch(preset, path)
 	local key = getCameraTweakKey(preset, path, "defaultRotationPitch")
 
-	local isLow = startsWith(path, "Low", true)
+	local isLow = startsWith(path, "Low_", true)
 	local defaults = {
 		["4w_aerondight"]                   = { low = 04, high = 12 },
 		["4w_Preset"]                       = { low = 04, high = 15 },
@@ -1465,8 +1551,12 @@ local function setCameraDefaultRotationPitch(preset, path, value)
 	local fallback = getCameraDefaultRotationPitch(preset, path)
 	if not fallback then return end
 
-	if startsWith(path, "Low", true) then
+	if startsWith(path, "Low_", true) then
 		value = value - 7
+
+		if dev_mode >= DevLevels.FULL then
+			log(LogLevels.INFO, 0x5c19, Text.LOG_PARAM_LH, key, path)
+		end
 	end
 
 	if equals(value, fallback) then return end
@@ -1480,6 +1570,10 @@ local function setCameraDefaultRotationPitch(preset, path, value)
 		end
 	end
 
+	--Finally, set the new value.
+	if dev_mode >= DevLevels.FULL then
+		log(LogLevels.INFO, 0x5c19, Text.LOG_PARAM_SET, key, value)
+	end
 	TweakDB:SetFlat(key, value)
 end
 
@@ -1521,6 +1615,10 @@ local function setCameraLookAtOffset(preset, path, x, y, z)
 		end
 	end
 
+	--Finally, set the new value.
+	if dev_mode >= DevLevels.FULL then
+		log(LogLevels.INFO, 0xb786, Text.LOG_PARAM_SET, key, serialize(value))
+	end
 	TweakDB:SetFlat(key, value)
 end
 
@@ -1550,17 +1648,15 @@ local function resetCustomCameraParams(key)
 	if not cptid then return end
 
 	local cparam = TDBID.ToStringDEBUG(cptid)
-	if not cparam then return end
+	if not cparam or contains(global_param_keys, cparam) then return end
 
-	local param = "Camera.VehicleTPP_DefaultParams"
-	if param == cparam then return end
-
-	for _, v in ipairs({ ".fov", ".lockedCamera" }) do
-		local path = cparam .. v
+	local baseKey = global_param_keys[contains(cparam:lower(), "_2w_") and 2 or 1]
+	for varName, _ in pairs(global_params) do
+		local path = cparam .. "." .. varName
 		local val = TweakDB:GetFlat(path)
 		if not val then goto continue end
 
-		local ref = TweakDB:GetFlat(param .. v)
+		local ref = TweakDB:GetFlat(baseKey .. "." .. varName)
 		if not ref then
 			if not isBoolean(val) then goto continue end
 			ref = false
@@ -2141,7 +2237,7 @@ local function loadPresetUsage(path, isFallback)
 	end
 end
 
----Saves the `preset_usage` table to `history.lua` on disk.
+---Saves the `preset_usage` table to `.usage` on disk.
 local function savePresetUsage()
 	if not isTable(preset_usage) then return end
 
@@ -2169,6 +2265,67 @@ local function savePresetUsage()
 
 	file:write(concat(parts))
 	file:close()
+end
+
+---Loads settings from a JSON file and applies them.
+---@param path string? Optional file path.
+---@param isFallback boolean? Prevents recursive fallback.
+local function loadGlobalOptions(path, isFallback)
+	path = isStringValid(path) and path or ".globals.json"
+
+	local file = io.open(path, "r")
+	if file then
+		local content = file:read("*a")
+		file:close()
+		if isStringValid(content) then
+			local ok, result = pcall(json.decode, content)
+			if ok and isTableValid(result) then
+				for varName, data in pairs(global_params) do
+					local item = result[varName]
+					if item and item.Value then
+						data.Value = item.Value
+					end
+				end
+				if not isFallback then
+					local src, dst = io.open(path, "r"), io.open(path .. ".bak", "w")
+					if src and dst then
+						dst:write(content)
+						src:close()
+						dst:close()
+					end
+				end
+				return
+			end
+		end
+	end
+
+	if not isFallback then
+		loadGlobalOptions(path .. ".bak", true)
+	end
+end
+
+---Saves the `global_params` table to `.globals.lua` on disk.
+local function saveGlobalOptions()
+	if not isTable(global_params) then return end
+
+	local path = ".globals.json"
+	if not isTableValid(global_params) then
+		pcall(os.remove, path)
+		return
+	end
+
+	local relevantData = {}
+	for varName, data in pairs(global_params) do
+		relevantData[varName] = {
+			Value = data.Value
+		}
+	end
+
+	local file = io.open(path, "w")
+	if file then
+		file:write(json.encode(relevantData))
+		file:close()
+	end
 end
 
 --#endregion
@@ -2648,6 +2805,109 @@ local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	return result
 end
 
+---Adds a button to open the Global Parameters window and returns the current window geometry if clicked.
+---@param controlPadding number # Left padding used to center content within the window.
+---@param halfHeightPadding number # Padding below the button.
+---@param buttonWidth number # Width of the button.
+---@param buttonHeight number # Height of the button.
+---@return number? x # The window X position when the button was clicked.
+---@return number? y # The window Y position when the button was clicked.
+---@return number? w # The window width when the button was clicked.
+---@return number? h # The window height (clamped to at least 400) when the button was clicked.
+local function addGlobalOptionsButton(controlPadding, halfHeightPadding, buttonWidth, buttonHeight)
+	if not areNumber(controlPadding, halfHeightPadding, buttonWidth, buttonHeight) then return end
+
+	local x, y, w, h
+
+	ImGui.Dummy(controlPadding, 0)
+	ImGui.SameLine()
+	if ImGui.Button(Text.GUI_OPEN_GOPT, buttonWidth, buttonHeight) then
+		x, y = ImGui.GetWindowPos()
+		w, h = ImGui.GetWindowSize()
+		h = max(h, 186)
+		global_options_open = not global_options_open
+	end
+	ImGui.Dummy(0, halfHeightPadding)
+
+	return x, y, w, h
+end
+
+---Draws and manages the Global Parameters window.
+---@param scale number # UI scale factor based on current DPI and font size.
+---@param controlPadding number # Left padding used to center content within the window.
+---@param heightPadding number # Height padding used to center content within the window.
+---@param x number? # Optional X position to place the window.
+---@param y number? # Optional Y position to place the window.
+---@param w number? # Optional width for the window.
+---@param h number? # Optional height for the window.
+local function openGlobalOptionsWindow(scale, contentWidth, controlPadding, heightPadding, buttonHeight, x, y, w, h)
+	if not global_options_open or not areNumber(scale, controlPadding, heightPadding) then return end
+
+	if areNumber(x, y, w, h) then
+		---@cast x number
+		---@cast y number
+		---@cast w number
+		---@cast h number
+		ImGui.SetNextWindowPos(x, y)
+		ImGui.SetNextWindowSize(w, h)
+	end
+
+	local flags = bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove)
+	global_options_open = ImGui.Begin(Text.GUI_OPEN_GOPT, global_options_open, flags)
+	if not global_options_open then return end
+
+	ImGui.Dummy(0, floor(4 * heightPadding))
+	if not isTableValid(global_params) or not ImGui.BeginTable("GlobalOptions", 2, ImGuiTableFlags.Borders) then
+		ImGui.End()
+		return
+	end
+
+	ImGui.TableSetupColumn("Parameter", ImGuiTableColumnFlags.WidthStretch)
+	ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthFixed)
+	ImGui.TableHeadersRow()
+
+	for key, data in pairs(global_params) do
+		ImGui.TableNextRow()
+
+		ImGui.TableSetColumnIndex(0)
+		ImGui.Text(tostring(data.DisplayName or key))
+
+		ImGui.TableSetColumnIndex(1)
+		if isBoolean(data.Value) then
+			local value = ImGui.Checkbox("##" .. key, data.Value)
+			if value ~= data.Value then
+				data.Value = value
+			end
+		elseif isNumber(data.Value) then
+			local label = "##" .. key
+			if data.Min and data.Max then
+				ImGui.PushItemWidth(floor(24 * scale) * #tostring(data.Max) / 2)
+				local value = ImGui.DragFloat(label, data.Value, 0.1, data.Min, data.Max, "%.0f")
+				if value ~= data.Value then
+					data.Value = value
+				end
+			else
+				--Unsupported type.
+				local _ = ImGui.InputText(label, data.Value)
+			end
+		else
+			ImGui.Text(tostring(data.Value))
+		end
+	end
+
+	ImGui.EndTable()
+
+	ImGui.Dummy(0, heightPadding)
+
+	if ImGui.Button(Text.GUI_RESET, contentWidth, buttonHeight) then
+		for _, data in pairs(global_params) do
+			data.Value = data.Default
+		end
+	end
+
+	ImGui.End()
+end
+
 ---Adds a button to open the Preset File Manager and returns the current window geometry if clicked.
 ---@param contentWidth number # The width of the content region to size the button.
 ---@param heightPadding number # Padding above the button.
@@ -2862,6 +3122,8 @@ end
 ---This function is triggered once at the beginning of a session.
 ---It loads all preset files, usage data, and applies the current camera preset.
 local function onInit()
+	loadGlobalOptions()
+	updateDefaultParams()
 	loadPresets(true)
 	loadPresetUsage()
 	applyPreset()
@@ -2885,15 +3147,18 @@ local function onUnmount(force)
 	vehicle_cache = {}
 	restoreModifiedPresets()
 	clearLastEditorBundle()
+	updateDefaultParams(true)
 	preset_active = false
 end
 
 ---Handles logic when the game or CET shuts down.
 ---Restores all camera presets and parameters to default and saves usage stats.
 local function onShutdown()
+	saveGlobalOptions()
 	restoreAllPresets()
 	restoreAllCustomCameraParams()
 	savePresetUsage()
+	updateDefaultParams(true)
 end
 
 --This event is triggered when the CET environment initializes for a particular game session.
@@ -2927,6 +3192,7 @@ registerForEvent("onInit", function()
 			log(LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_MNT)
 		end
 
+		updateDefaultParams()
 		applyPreset()
 	end)
 
@@ -2953,6 +3219,7 @@ registerForEvent("onInit", function()
 		if overlay_locked then
 			backupDevMode = backupDevMode or dev_mode
 			dev_mode = DevLevels.DISABLED
+			global_options_open = false
 			file_man_open = false
 			return
 		end
@@ -3012,6 +3279,7 @@ end)
 --Detects when the CET overlay is closed.
 registerForEvent("onOverlayClose", function()
 	overlay_open = false
+	global_options_open = false
 	file_man_open = false
 end)
 
@@ -3089,11 +3357,15 @@ registerForEvent("onDraw", function()
 		return
 	end
 
+	--Button to open the global Default Parameters window.
+	local globalBtnWidth = floor(192 * scale)
+	local dpx, dpy, dpw, dph = addGlobalOptionsButton(controlPadding, halfHeightPadding, globalBtnWidth, buttonHeight)
+	openGlobalOptionsWindow(scale, contentWidth, controlPadding, heightPadding, buttonHeight, dpx, dpy, dpw, dph)
+
 	--The button that reloads all presets.
-	local rldBtnWidth = floor(192 * scale)
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
-	if ImGui.Button(Text.GUI_RLD_ALL, rldBtnWidth, buttonHeight) then
+	if ImGui.Button(Text.GUI_RLD_ALL, globalBtnWidth, buttonHeight) then
 		log_suspend = false
 		editor_bundles = {}
 		vehicle_cache = {}
@@ -3275,8 +3547,9 @@ registerForEvent("onDraw", function()
 					---@cast camMap table<string, string>
 					local list = split(row.valTip, "|") or {}
 					for _, v in ipairs(CameraLevels) do
+						local cam = camMap[v]
 						insert(list, v .. ":")
-						insert(list, camMap[v])
+						insert(list, cam and cam or "\u{f0026} " .. Text.GUI_NONE)
 					end
 					addTooltip(nil, list)
 				end

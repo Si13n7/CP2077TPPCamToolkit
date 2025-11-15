@@ -8,8 +8,7 @@ Third-Person Vehicle Camera Tool
 Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
-Filename: text.lua
-Version: 2025-07-20, 20:58 UTC+01:00 (MEZ)
+Version: 2025-08-26, 22:43 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -22,6 +21,7 @@ return {
 	GUI_YES = "\u{f0026} Yes",
 	GUI_NO = "\u{f073a} No",
 	GUI_NONE = "None",
+	GUI_RESET = "Reset",
 
 	--GUI: 🚀 Main Controls and Tooltips
 	GUI_TITL = "Third-Person Vehicle Camera Tool",
@@ -41,6 +41,9 @@ return {
 	GUI_SAVE_TIP = "Applies the configured values and saves them permanently to \"presets/%s.lua\".\n\nChanges will only take effect after exiting and re-entering the vehicle.",
 	GUI_REST_TIP = "Removes the \"presets/%s.lua\" to revert to the default preset.\n\nYou must exit and re-enter the vehicle for the changes to take effect",
 	GUI_OVWR_CONFIRM = "Replace existing file \"presets/%s.lua\"?",
+	GUI_OPEN_GOPT = "\u{F1064} Global Parameters ",
+	GUI_GOPT_FOV = "Field Of View",
+	GUI_GOPT_LC = "No Auto-Centering",
 	GUI_OPEN_FMAN = "\u{f12e3} Preset File Manager ",
 
 	--GUI: 📋 Table Label Tooltips
@@ -82,8 +85,10 @@ return {
 	LOG_MOD_OFF = "Mod has been disabled!",
 	LOG_MOD_ON = "Mod has been enabled!",
 	LOG_PARAM_BAK = "Backup param (key: '%s'; value: '%s').",
+	LOG_PARAM_LH = "Param (key: '%s'; path: '%s') is low height.",
 	LOG_PARAM_MANIP = "Global param manipulation detected (key: '%s'; value: '%s'), reset value to '%s'.",
 	LOG_PARAM_REST = "Restore param (key: '%s') to value '%s'.",
+	LOG_PARAM_SET = "Set param (key: '%s') to value '%s'.",
 	LOG_PSET_SAVED = "File 'presets/%s.lua' was saved successfully.",
 	LOG_PSET_UPD = "The preset '%s' has been updated.",
 	LOG_PSETS_RLD = "Presets have been reloaded.",

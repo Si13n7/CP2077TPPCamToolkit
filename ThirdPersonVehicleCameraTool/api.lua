@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-07-20, 20:58 UTC+01:00 (MEZ)
+Version: 2025-08-26, 22:43 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -200,3 +200,9 @@ spdlog = spdlog
 ---@class dir # Not a class — global function only.
 ---@field dir fun(path: string): table # Returns a list of file/folder entries in the specified directory. Each entry is a table with at least a `name` field.
 dir = dir
+
+---Provides functions for encoding tables to JSON strings and decoding JSON strings to Lua tables.
+---@class json
+---@field encode fun(value: any): string # Converts a Lua table or value to a JSON-formatted string. Returns a string representation of the data.
+---@field decode fun(jsonString: string): table # Converts a JSON-formatted string to a Lua table. Returns the parsed table if successful, or nil if the parsing fails.
+json = json
