@@ -10,7 +10,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-04-15, 12:30 UTC+01:00 (MEZ)
+Version: 2025-04-17, 12:20 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -43,7 +43,7 @@ ______________________________________________
 ---@field BeginTable fun(id: string, columns: integer, flags?: integer): boolean # Begins a table with the specified number of columns. Returns `true` if the table is created successfully and should be rendered.
 ---@field TableSetupColumn fun(label: string, flags?: integer, init_width_or_weight?: number): nil # Defines a column in the current table with optional flags and initial width or weight.
 ---@field TableHeadersRow fun(): nil # Automatically creates a header row using column labels defined by `TableSetupColumn()`. Must be called right after defining the columns.
----@field TableNextRow fun(): nil # Advances to the next row of the table. Must be called between rows.
+---@field TableNextRow fun(row_flags?: integer, min_row_height?: number): nil # Advances to the next row. Optional: row flags and minimum height in pixels.
 ---@field TableSetColumnIndex fun(index: integer): nil # Moves the focus to a specific column index within the current table row.
 ---@field EndTable fun(): nil # Ends the creation of the current table. Must always be called after `ImGui.BeginTable()`.
 ---@field GetColumnWidth fun(columnIndex?: integer): number # Returns the current width in pixels of the specified column index (default: 0). Only valid when called within an active table.
@@ -54,6 +54,9 @@ ______________________________________________
 ---@field GetWindowSize fun(): number, number # Returns the width and height of the current window in pixels.
 ---@field SetNextWindowPos fun(x: number, y: number): nil # Sets the position for the next window before calling ImGui.Begin().
 ---@field SetNextWindowSize fun(width: number, height: number): nil # Sets the size for the next window before calling ImGui.Begin().
+---@field GetFontSize fun(): number # Returns the height in pixels of the currently used font. Useful for vertical alignment calculations.
+---@field GetCursorPosY fun(): number # Returns the current Y-position of the cursor within the window. Can be used to place elements precisely.
+---@field SetCursorPosY fun(y: number): nil # Sets the Y-position of the cursor within the window. Use to manually position elements vertically.
 ---@field OpenPopup fun(id: string): nil # Opens a popup by identifier. Should be followed by ImGui.BeginPopup().
 ---@field BeginPopup fun(id: string): boolean # Starts a popup window with the given ID. Returns true if it should be drawn.
 ---@field CloseCurrentPopup fun(): nil # Closes the currently open popup window. Should be called inside the popup itself.

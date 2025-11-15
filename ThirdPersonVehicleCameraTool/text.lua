@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-04-16, 10:00 UTC+01:00 (MEZ)
+Version: 2025-04-17, 12:20 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -19,46 +19,59 @@ ______________________________________________
 
 return {
 	--GUI: General
-	GUI_TRUE = "True",
-	GUI_FALSE = "False",
-	GUI_YES = "Yes",
-	GUI_NO = "No",
+	GUI_YES = "\u{f0026} Yes",
+	GUI_NO = "\u{f073a} No",
 	GUI_NONE = "None",
 
 	--GUI: Main Controls
 	GUI_TITL = "Third-Person Vehicle Camera Tool",
 	GUI_TGL_MOD = "Toggle Mod Functionality",
 	GUI_TGL_MOD_TIP = "Enables or disables the mod functionality.",
-	GUI_RLD_ALL = "Reload All Presets",
-	GUI_RLD_ALL_TIP = "Reloads all data from custom preset files - only needed if files have been changed or added, or if you want to reset the last unsaved changes.\n\nKeep in mind that changes only take effect after exiting and re-entering the vehicle",
+	GUI_RLD_ALL = "\u{f054d} Reload All Presets ",
+	GUI_RLD_ALL_TIP =
+	"Reloads all data from custom preset files - only needed if files have been changed or added, or if you want to reset the last unsaved changes.\n\nKeep in mind that changes only take effect after exiting and re-entering the vehicle",
 	GUI_DMODE = "Developer Mode",
-	GUI_DMODE_TIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso adjusts the level of debug output:\n 0 = Disabled\n 1 = Print only\n 2 = Print & Alert\n 3 = Print, Alert & Log",
-	GUI_APPLY = "Apply Changes",
-	GUI_APPLY_TIP = "Applies the configured values without saving them permanently.\n\nThe vehicle must be exited and re-entered for the changes to become active.",
-	GUI_SAVE = "Save Changes Permanently",
-	GUI_SAVE_TIP = "Applies the configured values and saves them permanently to \"presets/%s.lua\".\n\nChanges will only take effect after exiting and re-entering the vehicle.",
-	GUI_REST_TIP = "Removes the \"presets/%s.lua\" to revert to the default preset.\n\nYou must exit and re-enter the vehicle for the changes to take effect",
+	GUI_DMODE_TIP =
+	"Enables a feature that allows you to create, test, and save your own presets.\n\nAlso adjusts the level of debug output:\n 0. Disabled\n 1. Print only\n 2. Print & Alert\n 3. Print, Alert & Log",
+	GUI_APPLY = "\u{f044f} Apply ",
+	GUI_APPLY_TIP =
+	"Applies the configured values without saving them permanently.\n\nThe vehicle must be exited and re-entered for the changes to become active.",
+	GUI_SAVE = "\u{f0193} Save ",
+	GUI_SAVE_TIP =
+	"Applies the configured values and saves them permanently to \"presets/%s.lua\".\n\nChanges will only take effect after exiting and re-entering the vehicle.",
+	GUI_REST_TIP =
+	"Removes the \"presets/%s.lua\" to revert to the default preset.\n\nYou must exit and re-enter the vehicle for the changes to take effect",
 	GUI_OVWR_CONFIRM = "Replace existing file \"presets/%s.lua\"?",
-	GUI_OPEN_FMAN = "Open Preset File Manager",
+	GUI_OPEN_FMAN = "\u{f12e3} Preset File Manager ",
 
 	--GUI: Table Headers
-	GUI_TBL_HEAD_KEY = "Key",
-	GUI_TBL_HEAD_VAL = "Value",
-	GUI_TBL_HEAD_LVL = "Level",
-	GUI_TBL_HEAD_ANG = "Angle",
-	GUI_TBL_HEAD_X = "X Offset",
-	GUI_TBL_HEAD_Y = "Y Offset",
-	GUI_TBL_HEAD_Z = "Z Offset",
+	GUI_TBL_HEAD_INFO = "\u{f11be}",
+	GUI_TBL_HEAD_VAL = "\u{f09a8}",
+	GUI_TBL_HEAD_LVL = "\u{f066a}",
+	GUI_TBL_HEAD_ANG = "\u{f10f3}\u{f0aee}",
+	GUI_TBL_HEAD_X = "\u{f0d4c}\u{f0b05}",
+	GUI_TBL_HEAD_Y = "\u{f0d51}\u{f0b06}",
+	GUI_TBL_HEAD_Z = "\u{f0d55}\u{f0b07}",
 
 	--GUI: Table Labels
-	GUI_TBL_LABL_VEH = "Vehicle",
-	GUI_TBL_LABL_APP = "Appearance",
-	GUI_TBL_LABL_CAMID = "Camera",
-	GUI_TBL_LABL_PSET = "Preset",
-	GUI_TBL_LABL_ISDEF = "Is Default",
+	GUI_TBL_LABL_VEH = "\u{f010b}",
+	GUI_TBL_LABL_VEH_TIP = "The name of the vehicle.",
+	GUI_TBL_LABL_APP = "\u{f1952}",
+	GUI_TBL_LABL_APP_TIP = "The appearance name of the vehicle.",
+	GUI_TBL_LABL_CAMID = "\u{f0567}",
+	GUI_TBL_LABL_CAMID_TIP = "The camera settings identifier used by this vehicle.",
+	GUI_TBL_LABL_PSET = "\u{f06e1}",
+	GUI_TBL_LABL_PSET_TIP = "The active camera preset applied to this vehicle.",
+	GUI_TBL_LABL_CLO = "\u{f0623}",
+	GUI_TBL_LABL_CLO_TIP = "Camera Distance: Close",
+	GUI_TBL_LABL_MID = "\u{f0622}",
+	GUI_TBL_LABL_MID_TIP = "Camera Distance: Medium",
+	GUI_TBL_LABL_FAR = "\u{f0621}",
+	GUI_TBL_LABL_FAR_TIP = "Camera Distance: Far",
 
 	--GUI: Table Values
-	GUI_TBL_VAL_PSET_TIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of Vehicle or Appearance, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.\n\n\nMatching Priorities (only the first match is loaded):\n\n1. Vehicle: (e.g. \"%s.lua\")\n2. Appearance (e.g. \"%s.lua\")\n3. Prefix of Vehicle: (e.g. \"%s.lua\")\n4. Prefix of Appearance: (e.g. \"%s.lua\")\n\n\nPlease ensure that your new preset name has the correct priority, otherwise, you will need to delete the one that will steal its priority. Take a look at the Preset File Manager to delete presets.",
+	GUI_TBL_VAL_PSET_TIP =
+	"When saving, the name \"%s\" is used. The new name must exactly match the value of Vehicle or Appearance, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.\n\n\nMatching Priorities (only the first match is loaded):\n\n\u{f0b3a}\u{f010b} Vehicle: (e.g. \"%s.lua\")\n\u{f0b3b}\u{f0567} Appearance: (e.g. \"%s.lua\")\n\u{f0b3c}\u{f010b} Prefix of Vehicle: (e.g. \"%s.lua\")\n\u{f0b3d}\u{f0567} Prefix of Appearance: (e.g. \"%s.lua\")\n\n\nPlease ensure that your new preset name has the correct priority, otherwise, you will need to delete the one that will steal its priority. Take a look at the Preset File Manager to delete presets.",
 	GUI_TBL_VAL_ANG_TIP = "Default:|%d|Min:|%d|Max:|%d|In Use:|%d",
 	GUI_TBL_VAL_X_TIP = "Default:|%.3f|Min:|%.3f|Max:|%.3f|In Use:|%.3f|Decrease:|Left|Increase:|Right",
 	GUI_TBL_VAL_Y_TIP = "Default:|%.3f|Min:|%.3f|Max:|%.3f|In Use:|%.3f|Decrease:|Farther|Increase:|Closer",
@@ -66,9 +79,9 @@ return {
 
 	--GUI: Preset File Manager
 	GUI_FMAN_TITLE = "Preset File Manager",
-	GUI_FMAN_HEAD_NAME = "Filename",
-	GUI_FMAN_HEAD_ACTION = "Actions",
-	GUI_FMAN_DEL_BTN = "Delete##%s",
+	GUI_FMAN_HEAD_NAME = " \u{f09a8}",
+	GUI_FMAN_HEAD_ACTION = " \u{f05e9}",
+	GUI_FMAN_DEL_BTN = "\u{f05e8}##%s",
 	GUI_FMAN_DEL_CONFIRM = "Delete file \"%s\"?",
 	GUI_FMAN_NO_PSETS = "No presets have been created yet.",
 
@@ -93,8 +106,10 @@ return {
 	LOG_CLEAR_PSETS = "Cleared all loaded camera offset presets.",
 	LOG_FILE_EXIST = "File '%s' already exists, and overwrite is disabled.",
 	LOG_NO_PSET_FOUND = "No preset found.",
-	LOG_NAMES_MISM = "The new preset name must be '%s', '%s', or a prefix of one of them; otherwise, it will not be applied and will be ignored.",
-	LOG_NAME_MISM = "The new preset name must be '%s' or a prefix of it; otherwise, it will not be applied and will be ignored.",
+	LOG_NAMES_MISM =
+	"The new preset name must be '%s', '%s', or a prefix of one of them; otherwise, it will not be applied and will be ignored.",
+	LOG_NAME_MISM =
+	"The new preset name must be '%s' or a prefix of it; otherwise, it will not be applied and will be ignored.",
 	LOG_PSET_NOT_CHANGED = "No changes were made to preset '%s' compared to the default preset '%s'.",
 	LOG_PSET_NOT_SAVED = "File 'presets/%s.lua' could not be saved.",
 	LOG_SKIP_PSET = "Skipping already loaded preset: '%s' ('%s/%s').",

@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-16, 10:00 UTC+01:00 (MEZ)
+Version: 2025-04-17, 12:20 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -18,11 +18,13 @@ ______________________________________________
 
 
 --Aliases for commonly used standard library functions to simplify code.
-local format, concat, insert, unpack, max, min, band, bor, lshift, rshift =
+local format, rep, concat, insert, unpack, floor, max, min, band, bor, lshift, rshift =
 	string.format,
+	string.rep,
 	table.concat,
 	table.insert,
 	table.unpack,
+	math.floor,
 	math.max,
 	math.min,
 	bit32.band,
@@ -165,6 +167,7 @@ local padding_locked
 ---@field FileName string? # The file name associated with the loaded preset.
 ---@field FileToken number? # Checksum of the File preset.
 ---@field Origin ICameraPreset? # A previous version of Current that has not been applied yet.
+---@field OriginName string?
 ---@field OriginToken number? # Checksum of the Origin preset.
 ---@field Default ICameraPreset? # The game's default preset for this vehicle.
 ---@field DefaultToken number? # Checksum of the Default preset.
@@ -1169,16 +1172,28 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	return true
 end
 
----Retrieves the available content width and calculates dynamic padding for UI alignment.
----If padding changes are locked, returns the last used padding.
----@return number width # The available content width inside the current window.
----@return number padding # The calculated horizontal padding for centering elements.
+---Retrieves the available content width, dynamic horizontal padding for centering UI elements, and current item spacing.
+---If `padding_locked` is true, returns the last computed `padding_width` without recalculation.
+---@return number width # The available width of the content region.
+---@return number padding # The computed horizontal padding for centering controls.
+---@return number spacing # The current horizontal item spacing from the style (style.ItemSpacing.x).
 local function getMetrics()
 	local width = ImGui.GetContentRegionAvail()
-	if padding_locked then return width, padding_width end
 	local style = ImGui.GetStyle()
-	padding_width = max(10, math.floor((width - 230) * 0.5 + 18) - style.ItemSpacing.x)
-	return width, padding_width
+	local spacing = style.ItemSpacing.x
+	if padding_locked then return width, padding_width, spacing end
+	padding_width = max(10, math.floor((width - 230) * 0.5 + 18) - spacing)
+	return width, padding_width, spacing
+end
+
+---Vertically aligns the next drawn item (typically text) within a cell of known height.
+---Calculates offset using the current font height to position the item relative to the vertical center.
+---@param cellHeight number # The height of the cell to align within.
+local function alignVertNext(cellHeight)
+	local h = ImGui.GetFontSize()
+	local cy = ImGui.GetCursorPosY()
+	local oy = (cellHeight - h) * 0.5
+	ImGui.SetCursorPosY(cy + oy)
 end
 
 ---Adjusts an ABGR color by modifying its alpha, blue, green, and red (weird order in LUA) components.
@@ -1381,14 +1396,16 @@ end)
 
 --Display a simple GUI with some options.
 registerForEvent("onDraw", function()
+	if not overlay_open then return end
+
 	--Main window begins
-	if not overlay_open or not ImGui.Begin(Text.GUI_TITL, ImGuiWindowFlags.AlwaysAutoResize) then return end
+	if not ImGui.Begin(Text.GUI_TITL, ImGuiWindowFlags.AlwaysAutoResize) then return end
 
 	--Minimum window width and height padding.
 	ImGui.Dummy(230, 4)
 
 	--Retrieves the available content width and the dynamically calculated control padding for UI element alignment.
-	local contentWidth, controlPadding = getMetrics()
+	local contentWidth, controlPadding, itemSpacingX = getMetrics()
 
 	--Checkbox to toggle mod functionality and handle enable/disable logic.
 	ImGui.Dummy(controlPadding, 0)
@@ -1475,55 +1492,78 @@ registerForEvent("onDraw", function()
 
 	local editor = deep(editor_data, format("%s*%s", name, appName)) ---@cast editor IEditorPresetData
 	editor.CurrentName = editor.CurrentName or key
+	editor.OriginName = editor.OriginName or key
 	editor.FileName = editor.FileName or key
 
 	if ImGui.BeginTable("PresetInfo", 2, ImGuiTableFlags.Borders) then
-		ImGui.TableSetupColumn(Text.GUI_TBL_HEAD_KEY, ImGuiTableColumnFlags.WidthFixed, -1)
+		ImGui.TableSetupColumn(Text.GUI_TBL_HEAD_INFO, ImGuiTableColumnFlags.WidthFixed, -1)
 		ImGui.TableSetupColumn(Text.GUI_TBL_HEAD_VAL, ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
-		local keyVal = (editor.CurrentName ~= key or presetFileExists(editor.CurrentName)) and editor.CurrentName or id
-		local dict = {
-			{ key = Text.GUI_TBL_LABL_VEH,   value = name },
-			{ key = Text.GUI_TBL_LABL_APP,   value = appName },
-			{ key = Text.GUI_TBL_LABL_CAMID, value = id },
-			{ key = Text.GUI_TBL_LABL_PSET,  value = keyVal },
-			{ key = Text.GUI_TBL_LABL_ISDEF, value = key == nil and Text.GUI_TRUE or Text.GUI_FALSE }
+		local rows = {
+			{ label = Text.GUI_TBL_LABL_VEH,   tip = Text.GUI_TBL_LABL_VEH_TIP,   value = name },
+			{ label = Text.GUI_TBL_LABL_APP,   tip = Text.GUI_TBL_LABL_APP_TIP,   value = appName },
+			{ label = Text.GUI_TBL_LABL_CAMID, tip = Text.GUI_TBL_LABL_CAMID_TIP, value = id },
+			{
+				label = Text.GUI_TBL_LABL_PSET,
+				tip = Text.GUI_TBL_LABL_PSET_TIP,
+				value = (editor.CurrentName ~= key or presetFileExists(editor.CurrentName)) and editor.CurrentName or id,
+				valTip = Text.GUI_TBL_VAL_PSET_TIP,
+				editable = true
+			}
 		}
-		for _, item in ipairs(dict) do
-			ImGui.TableNextRow()
+
+		local height = 28
+		local skipAppRow = name == appName
+		for _, row in ipairs(rows) do
+			if row.label == Text.GUI_TBL_LABL_APP and skipAppRow then goto continue end
+			ImGui.TableNextRow(0, height)
 			ImGui.TableSetColumnIndex(0)
-			ImGui.Text(item.key)
 
-			local text = item.value or Text.GUI_NONE
+			alignVertNext(height)
+			ImGui.Text(row.label)
+			addTooltip(row.tip)
+
 			ImGui.TableSetColumnIndex(1)
-			if item.key == Text.GUI_TBL_LABL_PSET then
-				local value = text
-				local file = ensureLuaExt(value)
 
-				local width = ImGui.CalcTextSize(file) + 8
+			if row.editable then
+				local curWidth = ImGui.CalcTextSize(ensureLuaExt(row.value))
+				local origWidth = ImGui.CalcTextSize(ensureLuaExt(editor.OriginName))
+				local width = min(max(56, curWidth, origWidth) + 8, contentWidth - 40)
 				ImGui.PushItemWidth(width)
 
-				local isntDef = value ~= id
-				local pushdCols = isntDef and pushColors(ImGuiCol.FrameBg, Colors.CUSTOM) or 0
+				local color
+				if editor.CurrentName ~= editor.OriginName then
+					color = Colors.DELETE
+				elseif presetFileExists(editor.CurrentName) then
+					color = Colors.CUSTOM
+				else
+					color = Colors.CONFIRM
+				end
+
+				local file = ensureLuaExt(row.value)
+				local pushd = row.value ~= id and pushColors(ImGuiCol.FrameBg, color) or 0
 				local newVal, changed = ImGui.InputText("##FileName", file, 96)
 				if changed and newVal then
 					editor.CurrentName = trimLuaExt(newVal)
 					editor.RenamePending = true
 				end
-				popColors(pushdCols)
-				addTooltip(
-					format(Text.GUI_TBL_VAL_PSET_TIP,
-						isntDef and file or ensureLuaExt(name),
-						name,
-						appName,
-						chopUnderscoreParts(name),
-						chopUnderscoreParts(appName)))
-
+				popColors(pushd)
+				addTooltip(format(
+					row.valTip,
+					file,
+					name,
+					appName,
+					chopUnderscoreParts(name),
+					chopUnderscoreParts(appName)
+				))
 				ImGui.PopItemWidth()
 			else
-				ImGui.Text(tostring(text))
+				alignVertNext(height)
+				ImGui.Text(tostring(row.value or Text.GUI_NONE))
 			end
+
+			::continue::
 		end
 
 		ImGui.EndTable()
@@ -1531,6 +1571,7 @@ registerForEvent("onDraw", function()
 
 	if editor.RenamePending then
 		editor.RenamePending = editor.CurrentName ~= editor.FileName and presetFileExists(editor.FileName)
+		editor.OriginName = editor.CurrentName
 	end
 
 	--Camera preset editor allowing adjustments to Angle, X, Y, and Z coordinates — if certain conditions are met.
@@ -1578,40 +1619,61 @@ registerForEvent("onDraw", function()
 	end
 
 	if ImGui.BeginTable("PresetEditor", 5, ImGuiTableFlags.Borders) then
-		local labels = {
+		local headers = {
 			Text.GUI_TBL_HEAD_LVL,
 			Text.GUI_TBL_HEAD_ANG,
 			Text.GUI_TBL_HEAD_X,
 			Text.GUI_TBL_HEAD_Y,
 			Text.GUI_TBL_HEAD_Z
 		}
-		for i, label in ipairs(labels) do
+
+		for i, header in ipairs(headers) do
 			local flag = i < 3 and ImGuiTableColumnFlags.WidthFixed or ImGuiTableColumnFlags.WidthStretch
-			ImGui.TableSetupColumn(label, flag, -1)
+			local head = header
+			if i > 2 and #head < 16 then
+				local pad = 16 - #head
+				local left = floor(pad / 2)
+				local right = pad - left
+				head = rep(" ", left) .. head .. rep(" ", right)
+			end
+			ImGui.TableSetupColumn(head, flag, -1)
 		end
 
 		ImGui.TableHeadersRow()
 
-		local tooltips = {
+		local rows = {
+			{ label = Text.GUI_TBL_LABL_CLO, tip = Text.GUI_TBL_LABL_CLO_TIP },
+			{ label = Text.GUI_TBL_LABL_MID, tip = Text.GUI_TBL_LABL_MID_TIP },
+			{ label = Text.GUI_TBL_LABL_FAR, tip = Text.GUI_TBL_LABL_FAR_TIP }
+		}
+
+		local tips = {
 			Text.GUI_TBL_VAL_ANG_TIP,
 			Text.GUI_TBL_VAL_X_TIP,
 			Text.GUI_TBL_VAL_Y_TIP,
 			Text.GUI_TBL_VAL_Z_TIP
 		}
-		for _, level in ipairs(PresetLevels) do
-			ImGui.TableNextRow()
-			ImGui.TableSetColumnIndex(0)
-			ImGui.Text(level)
 
-			for i, field in ipairs(PresetOffsets) do
+		local height = 28
+		for i, row in ipairs(rows) do
+			local level = PresetLevels[i]
+
+			ImGui.TableNextRow(0, height)
+			ImGui.TableSetColumnIndex(0)
+
+			alignVertNext(height)
+			ImGui.Text(row.label)
+			addTooltip(row.tip)
+
+			for j, field in ipairs(PresetOffsets) do
 				local defVal = get(default, 0, level, field)
 				local curVal = get(preset, defVal, level, field)
-				local speed = pick(i, 1, 5e-3)
-				local minVal = pick(i, -45, -5, -10, 0)
-				local maxVal = pick(i, 90, 5, 10, 32)
-				local fmt = pick(i, "%.0f", "%.3f")
+				local speed = pick(j, 1, 5e-3)
+				local minVal = pick(j, -45, -5, -10, 0)
+				local maxVal = pick(j, 90, 5, 10, 32)
+				local fmt = pick(j, "%.0f", "%.3f")
 
-				ImGui.TableSetColumnIndex(i)
+				ImGui.TableSetColumnIndex(j)
 				ImGui.PushItemWidth(-1)
 
 				local pushd = not equals(curVal, defVal) and pushColors(ImGuiCol.FrameBg, Colors.CUSTOM) or 0
@@ -1623,7 +1685,7 @@ registerForEvent("onDraw", function()
 				end
 				popColors(pushd)
 
-				local tip = tooltips[i]
+				local tip = tips[j]
 				if tip then
 					local origVal = get(editor.Origin, defVal, level, field)
 					addTooltip(split(format(tip, defVal, minVal, maxVal, origVal), "|"))
@@ -1655,7 +1717,8 @@ registerForEvent("onDraw", function()
 	--Button to apply previously configured values in-game.
 	local color = editor.SaveIsRestore and Colors.RESTORE or Colors.CONFIRM
 	local pushed = editor.ApplyPending and pushColors(ImGuiCol.Button, color) or 0
-	if ImGui.Button(Text.GUI_APPLY, contentWidth, 24) then
+	local btnWidth = floor(contentWidth * 0.5 - (itemSpacingX * 0.5))
+	if ImGui.Button(Text.GUI_APPLY, btnWidth, 24) then
 		editor.RefreshPending = true
 		editor.ApplyPending = false
 		camera_presets[key] = preset
@@ -1663,12 +1726,12 @@ registerForEvent("onDraw", function()
 	end
 	popColors(pushed)
 	addTooltip(Text.GUI_APPLY_TIP)
-	ImGui.Dummy(0, 1)
+	ImGui.SameLine()
 
-	--Button to save configured values to a file for future automatic use.
+	--Button in same line to save configured values to a file for future automatic use.
 	local saveConfirmed = false
 	pushed = (editor.SavePending or editor.RenamePending) and pushColors(ImGuiCol.Button, color) or 0
-	if ImGui.Button(Text.GUI_SAVE, contentWidth, 24) then
+	if ImGui.Button(Text.GUI_SAVE, btnWidth, 24) then
 		local path = key == editor.FileName and key or editor.FileName ---@cast path string
 		if presetFileExists(path) then
 			overwrite_confirm = true
@@ -1757,6 +1820,7 @@ registerForEvent("onDraw", function()
 		ImGui.TableSetupColumn(Text.GUI_FMAN_HEAD_ACTION, ImGuiTableColumnFlags.WidthFixed)
 		ImGui.TableHeadersRow()
 
+		local height = 28
 		for _, f in ipairs(files) do
 			local file = f.name
 			if not hasLuaExt(file) then goto continue end
@@ -1769,6 +1833,7 @@ registerForEvent("onDraw", function()
 			ImGui.TableNextRow()
 			ImGui.TableSetColumnIndex(0)
 
+			alignVertNext(height)
 			local columnWidth = ImGui.GetColumnWidth(0) - 4
 			local textWidth = ImGui.CalcTextSize(file)
 			if columnWidth < textWidth then
@@ -1785,7 +1850,7 @@ registerForEvent("onDraw", function()
 			end
 
 			ImGui.TableSetColumnIndex(1)
-			if ImGui.Button(format(Text.GUI_FMAN_DEL_BTN, file)) then
+			if ImGui.Button(format(Text.GUI_FMAN_DEL_BTN, file), 0, height) then
 				ImGui.OpenPopup(file)
 			end
 
