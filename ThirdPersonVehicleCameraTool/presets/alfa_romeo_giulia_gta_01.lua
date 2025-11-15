@@ -1,0 +1,1 @@
+return{ID="4w_Quadra66",Close={y=0.25},Medium={y=0.35}}
