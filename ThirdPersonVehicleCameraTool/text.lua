@@ -11,17 +11,16 @@ return {
 	GUI_MOD_TOGGLE = "Toggle Mod Functionality",
 	GUI_MOD_TOGGLE_TOOLTIP = "Enables or disables the mod functionality.",
 	GUI_PRESETS_RELOAD = "Reload All Presets",
-	GUI_PRESETS_RELOAD_TOOLTIP = "Reloads all data from custom preset files - only needed if files have been changed or added, or if you want to reset the last unsaved changes.\n\nPlease note that you need to exit and re-enter the vehicle for the changes to take effect.",
+	GUI_PRESETS_RELOAD_TOOLTIP = "Reloads all data from custom preset files - only needed if files have been changed or added, or if you want to reset the last unsaved changes.\n\nKeep in mind that changes only take effect after exiting and re-entering the vehicle",
 	GUI_DEVMODE = "Developer Mode",
 	GUI_DEVMODE_TOOLTIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso adjusts the level of debug output:\n 0 = Disabled\n 1 = Print only\n 2 = Print & Alert\n 3 = Print, Alert & Log",
 	GUI_PRESET_APPLY = "Apply Changes",
-	GUI_PRESET_APPLY_TOOLTIP = "Applies the configured values without saving them permanently.\n\nPlease note that you need to exit and re-enter the vehicle for the changes to take effect.",
-	GUI_PRESET_SAVE = "Save Changes to File",
-	GUI_PRESET_SAVE_TOOLTIP = "Saves the modified preset permanently under \"./presets/%s.lua\".\n\nPlease note that overwriting existing presets is not allowed by default to prevent accidental loss of data.",
-	GUI_ALLOW_OVERWRITE = "Allow Overwriting of Files",
-	GUI_ALLOW_OVERWRITE_TOOLTIP = "Enables or disables the ability to overwrite existing preset files.",
+	GUI_PRESET_APPLY_TOOLTIP = "Applies the configured values without saving them permanently.\n\nThe vehicle must be exited and re-entered for the changes to become active.",
+	GUI_PRESET_SAVE = "Apply & Save Changes",
+	GUI_PRESET_SAVE_TOOLTIP = "Applies the configured values and saves them permanently to \"./presets/%s.lua\".\n\nChanges will only take effect after exiting and re-entering the vehicle.",
+	GUI_PRESET_RESTORE_TOOLTIP = "Removes the \"./presets/%s.lua\" to revert to the default preset.\n\nYou must exit and re-enter the vehicle for the changes to take effect",
+	GUI_OVERWRITE_CONFIRM = "Replace existing file \"./presets/%s.lua\"?",
 	GUI_PRESET_MANAGER = "Open Preset File Manager",
-	GUI_FMAN_NO_PRESETS = "No presets have been created yet.",
 
 	--GUI: Table Headers
 	GUI_TABLE_HEADER_KEY = "Key",
@@ -52,6 +51,7 @@ return {
 	GUI_FMAN_HEADER_ACTIONS = "Actions",
 	GUI_FMAN_DELETE_BUTTON = "Delete##%s",
 	GUI_FMAN_DELETE_CONFIRM = "Delete file \"%s\"?",
+	GUI_FMAN_NO_PRESETS = "No presets have been created yet.",
 
 	--LOG: Info
 	LOG_CAMERA_PRESET = "Camera preset: '%s'",
@@ -88,7 +88,7 @@ return {
 	LOG_FAILED_TO_LOAD_PRESET = "Failed to load preset './%s/%s': %s",
 	LOG_INVALID_PRESET = "Invalid or failed preset './%s/%s'.",
 	LOG_MISSING_DEFAULT = "Default preset '%s' could not be found.",
-	LOG_NO_ORIGINAL_PRESET = "Original preset '%s' for '%s' not found.",
+	LOG_NO_DEFAULT_PRESET = "Default preset '%s' for '%s' not found.",
 	LOG_NO_PRESET_FOR_LEVEL = "No preset provided for level '%s'.",
 	LOG_DELETE_FAILURE = "Failed to delete preset '%s'."
 }

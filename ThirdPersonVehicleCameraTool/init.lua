@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-12, 16:20 UTC+01:00 (MEZ)
+Version: 2025-04-14, 18:36 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -107,26 +107,27 @@ ImGuiStyle = ImGuiStyle
 ---@class bit32
 ---@field bor fun(...: integer): integer # Bitwise OR of all given integer values.
 ---@field band fun(x: integer, y: integer): integer # Returns the bitwise AND of two integers.
+---@field bxor fun(x: integer, y: integer): integer # Returns the bitwise XOR (exclusive or) of two integers.
 ---@field rshift fun(x: integer, disp: integer): integer # Shifts `x` right by `disp` bits, filling in with zeros from the left.
 ---@field lshift fun(x: integer, disp: integer): integer # Shifts `x` left by `disp` bits, discarding bits shifted out on the left.
 bit32 = bit32
 
 ---Provides access to game data stored in the database, including camera offsets and various other game settings.
 ---@class TweakDB
----@field GetFlat fun(self: TweakDB, key: string): any|nil # Retrieves a value from the database based on the provided key.
+---@field GetFlat fun(self: TweakDB, key: string): any? # Retrieves a value from the database based on the provided key.
 ---@field SetFlat fun(self: TweakDB, key: string, value: any) # Sets or modifies a value in the database for the specified key.
 TweakDB = TweakDB
 
 ---Represents a TweakDB ID used to reference records in the game database.
 ---@class TDBID
----@field ToStringDEBUG fun(id: TDBID): string|nil # Converts a TDBID to a readable string, typically starting with a namespace like "Vehicle.".
+---@field ToStringDEBUG fun(id: TDBID): string? # Converts a TDBID to a readable string, typically starting with a namespace like "Vehicle.".
 TDBID = TDBID
 
 ---Provides various global game functions, such as getting the player, mounted vehicles, and converting names to strings.
 ---@class Game
 ---@field NameToString fun(value: any): string # Converts a game name object to a readable string.
----@field GetPlayer fun(): Player|nil # Retrieves the current player instance if available.
----@field GetMountedVehicle fun(player: Player): Vehicle|nil # Returns the vehicle the player is currently mounted in, if any.
+---@field GetPlayer fun(): Player? # Retrieves the current player instance if available.
+---@field GetMountedVehicle fun(player: Player): Vehicle? # Returns the vehicle the player is currently mounted in, if any.
 Game = Game
 
 ---Represents the player character in the game, providing functions to interact with the player instance.
@@ -136,9 +137,9 @@ Player = Player
 
 ---Represents a vehicle entity within the game, providing functions to interact with it, such as getting the appearance name.
 ---@class Vehicle
----@field GetCurrentAppearanceName fun(self: Vehicle): string|nil # Retrieves the current appearance name of the vehicle.
+---@field GetCurrentAppearanceName fun(self: Vehicle): string? # Retrieves the current appearance name of the vehicle.
 ---@field GetRecordID fun(self: Vehicle): any # Returns the unique TweakDBID associated with the vehicle.
----@field GetTDBID fun(self: Vehicle): TDBID|nil # Retrieves the internal TweakDB identifier used to reference this vehicle in the game database. Returns `nil` if unavailable.
+---@field GetTDBID fun(self: Vehicle): TDBID? # Retrieves the internal TweakDB identifier used to reference this vehicle in the game database. Returns `nil` if unavailable.
 Vehicle = Vehicle
 
 ---Represents a three-dimensional vector, commonly used for positions or directions in the game.
@@ -223,6 +224,20 @@ LogLevel = {
 	ERROR = 2
 }
 
+---Color values used to style UI elements depending on context.
+---@class ColorEnum
+---@field CUSTOM integer # Used for user-defined or dynamically adjusted presets.
+---@field RESTORE integer # Used for presets that will restore to default values.
+---@field CONFIRM integer # Used when confirming modifications or changes.
+---@field DELETE integer # Used for destructive actions such as deletion.
+---@type ColorEnum
+Colors = {
+	CUSTOM = 0x8a6a7a29,
+	RESTORE = 0x8a297a68,
+	CONFIRM = 0x8a295c7a,
+	DELETE = 0x8a29297a,
+}
+
 ---Format string for generating a TweakDB path to a vehicle's default rotation pitch value.
 ---First `%s` = camera ID, second `%s` = camera level (e.g., "High_Close").
 ---@type string
@@ -279,16 +294,16 @@ local _modifiedPresets = {}
 ---@field z number # The offset on the Z-axis.
 
 ---Represents a vehicle camera preset or links to another one.
----@class CameraPreset
----@field ID string|nil # The camera ID used for the vehicle.
----@field Close IOffsetData|nil # The offset data for close camera view.
----@field Medium IOffsetData|nil # The offset data for medium camera view.
----@field Far IOffsetData|nil # The offset data for far camera view.
----@field Link string|nil # The name of another vehicle appearance to link to (if applicable).
----@field IsDefault boolean|nil # Whether to reset to default camera offsets.
+---@class ICameraPreset
+---@field ID string? # The camera ID used for the vehicle.
+---@field Close IOffsetData? # The offset data for close camera view.
+---@field Medium IOffsetData? # The offset data for medium camera view.
+---@field Far IOffsetData? # The offset data for far camera view.
+---@field Link string? # The name of another vehicle appearance to link to (if applicable).
+---@field IsDefault boolean? # Whether to reset to default camera offsets.
 
 ---Contains all camera presets and linked vehicles.
----@type table<string, CameraPreset>
+---@type table<string, ICameraPreset>
 local _cameraPresets = {}
 
 ---Determines whether the CET overlay is open.
@@ -304,30 +319,36 @@ local _guiPadding
 ---@type boolean
 local _guiLockPadding
 
----The currently mounted vehicle camera preset for the editor.
----@type CameraPreset|nil
-local _guiEditorPreset
+---Represents the state of a editable vehicle camera preset in the UI editor.
+---Tracks different versions of the preset to properly trace changes.
+---@class IEditorPresetData
+---@field Current ICameraPreset? # The currently edited preset (may be modified by the UI).
+---@field CHash number? # Hash of the Current data, used for change tracking.
+---@field CName string? # Editable working name for the current preset.
+---@field Default ICameraPreset? # The original default preset values for this vehicle.
+---@field DHash number? # Hash of the Default preset.
+---@field Origin ICameraPreset? # A previous version of Current that has not been applied yet.
+---@field OHash number? # Hash of the Origin preset.
+---@field Source ICameraPreset? # The initial state of Current before it was ever saved permanently.
+---@field SHash number? # Hash of the Source preset.
+---@field RefreshPending boolean? # Indicates the editor UI should refresh its internal state.
+---@field ApplyPending boolean? # Indicates changes that can be applied to take effect in-game.
+---@field SavePending boolean? # Indicates that there are unsaved changes that can be saved.
+---@field SaveIsRestore boolean? # If true, saving the preset will act as a revert-to-default action.
 
----The default preset entry used for comparison in the editor (e.g., when checking if a value has changed).
----@type CameraPreset|nil
-local _guiEditorPresetDef
-
----The file name used for saving the current edited preset (including `.lua` extension).
----@type string|nil
-local _guiEditorPresetName
-
----Tracks unsaved editor changes for individual vehicles.
----Each key is a vehicle name, and the boolean value indicates whether unsaved changes exist.
----@type table<string, boolean>
-local _guiEditorUnsavedChanges = {}
+---Holds per-vehicle editor state for all mounted and recently edited vehicles.
+---The key is always the vehicle name and appearance name, separated by an asterisk (*).
+---Each entry tracks editor data and preset version states for the given vehicle.
+---@type table<string, IEditorPresetData|nil>
+local _guiEditorPresetData = {}
 
 ---Determines whether overwriting the preset file is allowed.
 ---@type boolean
-local _guiEditorAllowOverwrite = false
+local _guiOverwriteConfirm = false
 
 ---Determines whether the Preset File Manager is open.
 ---@type boolean
-local _fileManToggle = false
+local _guiFileManToggle = false
 
 ---Logs and displays messages based on the current `DevMode` level.
 ---Messages can be written to the log file, printed to the console, or shown as in-game alerts.
@@ -386,29 +407,89 @@ function LogE(mode, level, format, ...)
 	DevMode = previous
 end
 
----Checks if two floating-point numbers are nearly equal within a small epsilon tolerance.
----@param a number # The first value to compare.
----@param b number # The second value to compare.
----@param epsilon number|nil # Optional tolerance. Defaults to 0.0001.
----@return boolean # True if the values are nearly equal.
-local function floatEquals(a, b, epsilon)
-	epsilon = epsilon or 0.0001
-	return math.abs(a - b) < epsilon
+---Checks whether a given value is a valid number.
+---@param n any # The value to check.
+---@return boolean # True if the value is a valid number, false otherwise.
+local function isNumber(n)
+	return type(n) == "number"
 end
 
----Rounds a floating-point number to 3 decimal places and trims unnecessary trailing zeros and dots.
----@param v number # The float value to round.
----@return string # The formatted string representing the rounded float.
-local function floatToString(v)
-	local str, _ = F("%.3f", v):gsub("0+$", ""):gsub("%.$", "")
-	return str
+---Checks whether the given value is a string.
+---@param s any # The value to check.
+---@return boolean # True if the value is a string, false otherwise.
+local function isString(s)
+	return type(s) == "string"
+end
+
+---Checks whether the given value is a table.
+---@param t any # The value to check.
+---@return boolean # True if the value is a table, false otherwise.
+local function isTable(t)
+	return type(t) == "table"
+end
+
+---Checks whether a given string represents a valid number (integer or float).
+---@param s string # The input string to check.
+---@return boolean # True if the string is a valid number, false otherwise.
+local function hasNumber(s)
+	return tonumber(s) ~= nil
+end
+
+---Compares two values for equality with special handling for numbers and tables.
+---Number values are compared with a small tolerance to account for floating-point imprecision.
+---Tables are compared recursively, including all nested keys and values.
+---Other types (string, boolean, etc.) use strict equality.
+---@param a any # The first value to compare.
+---@param b any # The second value to compare.
+---@return boolean # True if the values are considered equal, false otherwise.
+local function equals(a, b)
+	if a == b then return true end
+
+	if type(a) ~= type(b) then return false end
+
+	if isNumber(a) then
+		return math.abs(a - b) < 1e-4
+	elseif isTable(a) then
+		for k, va in pairs(a) do
+			if not equals(va, b[k]) then return false end
+		end
+		for k, vb in pairs(b) do
+			if not equals(vb, a[k]) then return false end
+		end
+		return true
+	end
+
+	return false
+end
+
+---Checks whether a value exists in a table (list or map) or as a substring in a string.
+---@param x table|string # The table or string to search.
+---@param v any # The value or substring to search for.
+---@return boolean # True if found, false otherwise.
+local function contains(x, v)
+	if x == nil or v == nil then return false end
+
+	if isString(x) and isString(v) then
+		---@cast x string
+		---@cast v string
+		return x:find(v, 1, true) ~= nil
+	elseif isTable(x) then
+		---@cast x table
+		for k, e in pairs(x) do
+			if e == v or k == v then
+				return true
+			end
+		end
+	end
+
+	return false
 end
 
 ---Checks if a string starts with a given prefix.
 ---@param str string # The string to check.
 ---@param prefix string # The prefix to match.
 ---@return boolean # True if `str` starts with `prefix`, false otherwise.
-local function strStartsWith(str, prefix)
+local function startsWith(str, prefix)
 	if not str or not prefix then return false end
 	str, prefix = tostring(str), tostring(prefix)
 	return #str >= #prefix and str:sub(1, #prefix) == prefix
@@ -418,7 +499,7 @@ end
 ---@param str string # The string to check.
 ---@param suffix string # The suffix to look for.
 ---@return boolean Returns # True if the `str` ends with the specified `suffix`, otherwise false.
-local function strEndsWith(str, suffix)
+local function endsWith(str, suffix)
 	if not str or not suffix then return false end
 	str, suffix = tostring(str), tostring(suffix)
 	return #str >= #suffix and str:sub(- #suffix) == suffix
@@ -428,80 +509,123 @@ end
 ---The number of parts removed depends on how many underscores are in the string.
 ---@param str string # The input string (e.g., "v_sport2_porsche_911turbo_player").
 ---@return string # The shortened string (e.g., "v_sport2_porsche").
-local function nameShortenSmart(str)
-	str = tostring(str or "")
+local function chopUnderscoreParts(str)
 	local parts = {}
-
+	str = tostring(str or "")
 	for part in str:gmatch("[^_]+") do
 		table.insert(parts, part)
 	end
-
-	local count = #parts
-	if count >= 3 then
-		count = count - 2
-	elseif count >= 2 then
-		count = count - 1
+	local count = #parts / 2
+	if count <= 1 then
+		count = count + 1
 	end
-
 	return table.concat(parts, "_", 1, count)
 end
 
 ---Checks if a given filename string ends with `.lua`.
 ---@param name string # The value to check, typically a string representing a filename.
 ---@return boolean # Returns `true` if the filename ends with `.lua`, otherwise `false`.
-local function fileIsLua(name)
+local function hasLuaExt(name)
 	if not name then return false end
 	name = tostring(name)
-	return strEndsWith(name, ".lua")
+	return endsWith(name, ".lua")
 end
 
 ---Returns the file name with a `.lua` extension. If the input already ends with `.lua`, it is returned unchanged.
 ---@param name string # The input value to be converted to a Lua file name.
 ---@return string # The file name with `.lua` extension, or an empty string if the input is `nil`.
-local function fileWithLuaExt(name)
+local function ensureLuaExt(name)
 	if not name then return "" end
 	name = tostring(name)
-	return fileIsLua(name) and name or name .. ".lua"
+	return hasLuaExt(name) and name or name .. ".lua"
 end
 
 ---Removes the `.lua` extension from a filename if present.
----@param name string # The filename to process.
+---@param name string? # The filename to process.
 ---@return string # The filename without `.lua` extension, or the original string if no `.lua` extension is found.
-local function fileWithoutLuaExt(name)
+local function trimLuaExt(name)
 	if not name then return "" end
 	name = tostring(name)
-	return fileIsLua(name) and name:gsub("%.lua$", "") or name
+	return hasLuaExt(name) and name:gsub("%.lua$", "") or name
 end
 
----Checks whether a given value exists in a sequential table.
----@param tbl table # The table to search through (must be a sequential array).
----@param value any # The value to search for in the table.
----@return boolean # Returns true if the value exists in the table, otherwise false.
-local function tblContains(tbl, value)
-	if type(tbl) ~= "table" or value == nil then return false end
-	for _, v in ipairs(tbl) do
-		if v == value then return true end
+---Iterates over a table's keys in sorted order.
+---Useful for producing stable output or consistent serialization.
+---@param t table # The table to iterate over.
+---@return fun(): any, any # An iterator that yields key-value pairs in sorted key order.
+local function kpairs(t)
+	t = isTable(t) and t or {}
+	local keys = {}
+	for k in pairs(t) do
+		table.insert(keys, k)
 	end
-	return false
+	table.sort(keys, function(a, b)
+		return tostring(a) < tostring(b)
+	end)
+	local i = 0
+	return function()
+		i = i + 1
+		local k = keys[i]
+		if k ~= nil then
+			return k, t[k]
+		end
+	end
+end
+
+---Creates a deep copy of a given table, including nested subtables.
+---@param t table # The table to copy.
+---@param seen table|nil # Internal table to track already-copied references (prevents cycles).
+---@return table # A new table with the same structure and values as the original.
+local function clone(t, seen)
+	---The user should only call this function with a table, but internally it may be something else at certain points.
+	---@cast t any
+	if not isTable(t) then return t end
+
+	if seen and seen[t] then return seen[t] end
+
+	local result = {}
+	seen = seen or {}
+	seen[t] = result
+
+	for k, v in pairs(t) do
+		result[k] = clone(v, seen)
+	end
+
+	return result
+end
+
+---Ensures a nested table path exists and returns the deepest subtable.
+---@param t table # The table to access.
+---@param ... any # Keys leading to the nested table
+---@return table? # The final nested subtable if `t` is a table; otherwise `nil`.
+local function deep(t, ...)
+	if not isTable(t) then return nil end
+	for i = 1, select("#", ...) do
+		local key = select(i, ...)
+		t[key] = t[key] or {}
+		t = t[key]
+	end
+	return t
 end
 
 ---Safely retrieves a nested value from a table (e.g., table[one][two][three]).
 ---Returns a default value if any level is missing or invalid.
----@param tbl table|nil # The root table to access.
+---@param t table? # The root table to access.
 ---@param fallback any # The fallback value if the lookup fails.
 ---@param ... string|number # One or more keys representing the path.
 ---@return any # The nested value if it exists, or the default value.
-local function get(tbl, fallback, ...)
-	if type(tbl) ~= "table" then return fallback end
-	local value = tbl
+local function get(t, fallback, ...)
+	if not isTable(t) then return fallback end
+	local v = t
 	for i = 1, select("#", ...) do
-		local key = select(i, ...)
-		if type(value) ~= "table" or key == nil then
+		local k = select(i, ...)
+		if not isTable(v) or k == nil then
 			return fallback
 		end
-		value = rawget(value, key)
+		---@cast v table
+		v = rawget(v, k)
 	end
-	return value ~= nil and value or fallback
+	return v == nil and fallback or v
 end
 
 ---Returns the value at the specified index from a variable list of arguments.
@@ -510,8 +634,71 @@ end
 ---@param ... any # A variable number of values to select from.
 ---@return any # The value at index `i`, or the last value if `i` is too large.
 local function pick(i, ...)
-	local args = { ... }
-	return args[i] or args[#args]
+	local len = select("#", ...)
+	if i <= len then
+		return select(i, ...)
+	else
+		return select(len, ...)
+	end
+end
+
+---Splits a string into a list of substrings using a specified separator.
+---@param s string? # The input string to split. If nil, returns an empty table.
+---@param sep string? # The separator to split by (default: ",").
+---@return string[] # A list of substrings resulting from the split.
+local function split(s, sep)
+	if not s then return {} end
+	sep = sep or ","
+	local t = {}
+	for s in string.gmatch(s, "([^" .. sep .. "]+)") do
+		table.insert(t, s)
+	end
+	return t
+end
+
+---Converts any value to a readable string representation.
+---For numbers, a trimmed 3-digit float format is used (e.g., 1.000 → "1", 3.140 → "3.14").
+---For tables, the output is compact, recursively formatted, and uses sorted keys.
+---@param x any # The value to convert to string.
+---@return string # A string representation of the value.
+local function stringOf(x)
+	if not isTable(x) then
+		if hasNumber(x) then
+			local str = F("%.3f", x):gsub("0+$", ""):gsub("%.$", "")
+			return str
+		end
+		return tostring(x)
+	end
+	local s = "{"
+	for k, v in kpairs(x) do
+		s = s .. "[" .. stringOf(k) .. "]=" .. stringOf(v) .. ","
+	end
+	return s:sub(1, -2) .. "}"
+end
+
+---Generates a simple numeric hash from a string.
+---@param x any # The value to hash.
+---@return integer # A numeric hash value.
+local function hash(x)
+	local s = stringOf(x)
+	local n = 5381
+	for i = 1, #s do
+		n = bit32.bxor(bit32.lshift(n, 5) + n, s:byte(i))
+	end
+	return bit32.band(n, 0x7fffffff)
+end
+
+---Checks whether a file with the given name exists and is readable.
+---@param path string # The full or relative path to the file.
+---@return boolean # True if the file exists and is readable, false otherwise.
+local function fileExists(path)
+	if not isString(path) then return false end
+	local file = io.open(path, "r")
+	if file then
+		file:close()
+		return true
+	end
+	return false
 end
 
 ---Fetches the default rotation pitch value for a vehicle camera.
@@ -519,7 +706,7 @@ end
 ---@param path string # The camera path for the vehicle.
 ---@return number # The default rotation pitch for the given camera path.
 local function getCameraDefaultRotationPitch(id, path)
-	return TweakDB:GetFlat(F(TWEAKDB_PATH_FORMAT_DRP, id, path)) or 11
+	return tonumber(TweakDB:GetFlat(F(TWEAKDB_PATH_FORMAT_DRP, id, path))) or 11
 end
 
 ---Sets the default rotation pitch value for a vehicle camera.
@@ -528,16 +715,16 @@ end
 ---@param value number # The value to set for the default rotation pitch.
 local function setCameraDefaultRotationPitch(id, path, value)
 	local fallback = getCameraDefaultRotationPitch(id, path)
-	if not fallback or floatEquals(value, fallback) then
+	if equals(value, fallback) then
 		return
 	end
-	TweakDB:SetFlat(F(TWEAKDB_PATH_FORMAT_DRP, id, path), value or fallback)
+	TweakDB:SetFlat(F(TWEAKDB_PATH_FORMAT_DRP, id, path), (value or fallback) + 1e-7)
 end
 
 ---Fetches the current camera offset from TweakDB based on the specified ID and path.
 ---@param id string # The camera ID.
 ---@param path string # The camera path to retrieve the offset for.
----@return Vector3|nil # The camera offset as a Vector3.
+---@return Vector3? # The camera offset as a Vector3.
 local function getCameraLookAtOffset(id, path)
 	return TweakDB:GetFlat(F(TWEAKDB_PATH_FORMAT_LAO, id, path))
 end
@@ -550,16 +737,16 @@ end
 ---@param z number # The Z-coordinate of the camera position.
 local function setCameraLookAtOffset(id, path, x, y, z)
 	local fallback = getCameraLookAtOffset(id, path)
-	if not fallback or (floatEquals(x, fallback.x) and floatEquals(y, fallback.y) and floatEquals(z, fallback.z)) then
+	if not fallback or (equals(x, fallback.x) and equals(y, fallback.y) and equals(z, fallback.z)) then
 		return
 	end
-	local value = Vector3.new((x or fallback.x), (y or fallback.y), (z or fallback.z))
+	local value = Vector3.new(x or fallback.x, y or fallback.y, z or fallback.z)
 	TweakDB:SetFlat(F(TWEAKDB_PATH_FORMAT_LAO, id, path), value)
 end
 
 ---Extracts the record name from a TweakDBID string representation.
 ---@param data any # The TweakDBID to be parsed.
----@return string|nil # The extracted record name, or nil if not found.
+---@return string? # The extracted record name, or nil if not found.
 local function getRecordName(data)
 	if not data then return nil end
 	return tostring(data):match("%-%-%[%[(.-)%-%-%]%]"):match("^%s*(.-)%s*$")
@@ -567,12 +754,11 @@ end
 
 ---Returns the vehicle the player is currently mounted in, if any.
 ---Internally retrieves the player instance and checks for an active vehicle.
----@return Vehicle|nil # The currently mounted vehicle instance, or nil if the player is not mounted.
+---@return Vehicle? # The currently mounted vehicle instance, or nil if the player is not mounted.
 local function getMountedVehicle()
 	local player = Game.GetPlayer()
 	if not player then
 		_isVehicleMounted = false
-		_guiEditorPreset = nil
 		return nil
 	end
 	local vehicle = Game.GetMountedVehicle(player)
@@ -581,8 +767,8 @@ local function getMountedVehicle()
 end
 
 ---Attempts to retrieve the camera ID associated with a given vehicle.
----@param vehicle Vehicle|nil # The vehicle from which to extract the camera ID.
----@return string|nil # The extracted camera ID (e.g., "4w_911") or nil if not found.
+---@param vehicle Vehicle? # The vehicle from which to extract the camera ID.
+---@return string? # The extracted camera ID (e.g., "4w_911") or nil if not found.
 local function getVehicleCameraID(vehicle)
 	if not vehicle then return nil end
 
@@ -606,8 +792,8 @@ local function getVehicleCameraID(vehicle)
 end
 
 ---Attempts to retrieve the name of the specified vehicle.
----@param vehicle Vehicle|nil # The vehicle object to retrieve the name from.
----@return string|nil # The resolved vehicle name as a string, or `nil` if it could not be determined.
+---@param vehicle Vehicle? # The vehicle object to retrieve the name from.
+---@return string? # The resolved vehicle name as a string, or `nil` if it could not be determined.
 local function getVehicleName(vehicle)
 	if not vehicle then return nil end
 
@@ -622,8 +808,8 @@ local function getVehicleName(vehicle)
 end
 
 ---Attempts to retrieve the appearance name of the specified vehicle.
----@param vehicle Vehicle|nil # The vehicle object to retrieve the appearance name from.
----@return string|nil # The resolved vehicle name as a string, or `nil` if it could not be determined.
+---@param vehicle Vehicle? # The vehicle object to retrieve the appearance name from.
+---@return string? # The resolved vehicle name as a string, or `nil` if it could not be determined.
 local function getVehicleAppearanceName(vehicle)
 	if not vehicle then return nil end
 
@@ -637,14 +823,14 @@ end
 ---Attempts to find the best matching key in the `_cameraPresets` table using one or more candidate values.
 ---It first checks for exact matches, and then for prefix-based partial matches.
 ---@param ... string # One or more strings to match against known preset keys (e.g., vehicle name, appearance name).
----@return string|nil # The matching key from `_cameraPresets`, or `nil` if no match was found.
+---@return string? # The matching key from `_cameraPresets`, or `nil` if no match was found.
 local function findPresetKey(...)
 	for pass = 1, 2 do
 		for i = 1, select("#", ...) do
 			local search = select(i, ...)
 			for key in pairs(_cameraPresets) do
 				local exact = pass == 1 and search == key
-				local partial = pass == 2 and strStartsWith(search, key)
+				local partial = pass == 2 and startsWith(search, key)
 				if exact or partial then return key end
 			end
 		end
@@ -657,41 +843,44 @@ end
 ---@param vehicleName string # The base vehicle name used for validation.
 ---@param appearanceName string # The appearance variant of the vehicle. May be the same as `vehicleName`.
 ---@param currentKey string # The currently active or fallback preset key. Used as return value on failure.
----@param newKey string|nil # The newly entered preset key that should be validated.
+---@param newKey string? # The newly entered preset key that should be validated.
 ---@return string # Returns the validated preset key (without `.lua` extension), or `currentKey` if validation fails.
 local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey)
-	if type(vehicleName) ~= "string" or
-		type(appearanceName) ~= "string" then
-		return currentKey
-	end
-	if type(currentKey) ~= "string" then return vehicleName end
-	if type(newKey) ~= "string" then return currentKey end
+	if not isString(vehicleName) or not isString(appearanceName) then return currentKey end
+	if not isString(currentKey) then return vehicleName end
+	if not isString(newKey) then return currentKey end
 
-	local name = fileWithoutLuaExt(newKey)
+	local name = trimLuaExt(newKey)
+
 	local len = #name
 	if len < 1 then
 		Log(LogLevel.WARN, Text.LOG_BLANK_NAME)
 		return currentKey
 	end
-	if strStartsWith(vehicleName, name) or
-		strStartsWith(appearanceName, name) then
+
+	if startsWith(vehicleName, name) or
+		startsWith(appearanceName, name) then
 		return name
 	end
+
 	if vehicleName ~= appearanceName then
 		Log(LogLevel.WARN, Text.LOG_NAMES_MISMATCH, vehicleName, appearanceName)
 	else
 		Log(LogLevel.WARN, Text.LOG_NAME_MISMATCH, vehicleName)
 	end
+
 	return currentKey
 end
 
----Retrieves the current camera offset data for the specified camera ID from TweakDB and returns it as a `CameraPreset` table.
+---Retrieves the current camera offset data for the specified camera ID from TweakDB and returns it as a `ICameraPreset` table.
 ---@param id string # The camera ID to query.
----@return CameraPreset|nil # The retrieved camera offset data, or nil if not found.
+---@return ICameraPreset? # The retrieved camera offset data, or nil if not found.
 local function getPreset(id)
 	if not id then return nil end
 
 	local preset = { ID = id }
+	---@cast preset ICameraPreset
+
 	for i, path in ipairs(TWEAKDB_PATH_LEVELS) do
 		local vec3 = getCameraLookAtOffset(id, path)
 		if not vec3 or (not vec3.x and not vec3.y and not vec3.z) then return nil end
@@ -699,12 +888,11 @@ local function getPreset(id)
 		local level = CAMERA_LEVELS[(i - 1) % 3 + 1]
 		local angle = getCameraDefaultRotationPitch(id, path)
 
-		---@cast preset table<string, IOffsetData>
 		preset[level] = {
-			a = angle,
-			x = vec3.x,
-			y = vec3.y,
-			z = vec3.z
+			a = tonumber(angle),
+			x = tonumber(vec3.x),
+			y = tonumber(vec3.y),
+			z = tonumber(vec3.z)
 		}
 
 		if preset.Far and preset.Medium and preset.Close then
@@ -720,8 +908,8 @@ local function getPreset(id)
 end
 
 ---Retrieves the default preset that matches the given preset's camera ID.
----@param preset CameraPreset # The preset to search for a default version.
----@return CameraPreset|nil # Returns the default preset if found, otherwise nil.
+---@param preset ICameraPreset # The preset to search for a default version.
+---@return ICameraPreset? # Returns the default preset if found, otherwise nil.
 local function getDefaultPreset(preset)
 	if not preset then return nil end
 
@@ -748,26 +936,27 @@ local function getDefaultPreset(preset)
 end
 
 ---Returns the Y and Z offset values from a preset or its fallback.
----@param preset CameraPreset|nil # The main preset table containing `Close`, `Medium`, or `Far` levels.
----@param fallback CameraPreset|nil # The fallback preset table used if values are missing in the main preset.
+---@param preset ICameraPreset? # The main preset table containing `Close`, `Medium`, or `Far` levels.
+---@param fallback ICameraPreset? # The fallback preset table used if values are missing in the main preset.
 ---@param level "Close"|"Medium"|"Far" # The level to fetch ("Close", "Medium", or "Far").
 ---@return number a # The angle value. Falls back to 11 if not found.
 ---@return number x # The X offset value. Falls back to 0 if not found.
 ---@return number y # The Y offset value. Falls back to 0 if not found.
 ---@return number z # The Z offset value. Falls back to a default per level (Close = 1.115, Medium = 1.65, Far = 2.25).
 local function getOffsetData(preset, fallback, level)
-	if type(preset) ~= "table" or not tblContains(CAMERA_LEVELS, level) then
+	if not isTable(preset) or not contains(CAMERA_LEVELS, level) then
 		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_NO_PRESET_FOR_LEVEL, level)
 		return 0, 0, 0, 0 --Should never be returned with the current code.
 	end
 
+	---@cast preset ICameraPreset
 	local p = preset[level]
 	local f = (fallback and fallback[level]) or {}
 
-	local a = (p and p.a) or f.a or 11
-	local x = (p and p.x) or f.x or 0
-	local y = (p and p.y) or f.y or 0
-	local z = (p and p.z) or f.z or ({ Close = 1.115, Medium = 1.65, Far = 2.25 })[level]
+	local a = tonumber(p and p.a or f.a) or 11
+	local x = tonumber(p and p.x or f.x) or 0
+	local y = tonumber(p and p.y or f.y) or 0
+	local z = tonumber(p and p.z or f.z) or ({ Close = 1.115, Medium = 1.65, Far = 2.25 })[level]
 
 	return a, x, y, z
 end
@@ -778,8 +967,8 @@ end
 ---until a final preset is found or the recursion depth limit (8) is reached.
 ---Missing values in the preset are replaced with fallback values from the default preset, if available.
 ---Each successfully applied preset ID is recorded in `_modifiedPresets`.
----@param preset CameraPreset|nil # The preset to apply. May be `nil` to auto-resolve via the current vehicle.
----@param count number|nil # Internal recursion counter to prevent infinite loops via `Link`. Do not set manually.
+---@param preset ICameraPreset? # The preset to apply. May be `nil` to auto-resolve via the current vehicle.
+---@param count number? # Internal recursion counter to prevent infinite loops via `Link`. Do not set manually.
 local function applyPreset(preset, count)
 	if not preset and not count then
 		local vehicle = getMountedVehicle()
@@ -851,7 +1040,7 @@ local function restoreModifiedPresets()
 	local amount = #changed
 	local restored = 0
 	for _, preset in pairs(_cameraPresets) do
-		if preset.IsDefault and tblContains(changed, preset.ID) then
+		if preset.IsDefault and contains(changed, preset.ID) then
 			applyPreset(preset)
 			Log(LogLevel.INFO, Text.LOG_RESTORED_PRESET, preset.ID)
 			restored = restored + 1
@@ -867,19 +1056,19 @@ end
 ---A preset is valid if it either:
 ---1. Has a string ID and at least one of Close, Medium, or Far contains a numeric `y` or `z` value.
 ---2. Or: has only a string `Link` and no other keys.
----@param preset CameraPreset # The preset to validate.
+---@param preset ICameraPreset # The preset to validate.
 ---@return boolean # Returns true if the preset is valid, false otherwise.
 local function isPresetValid(preset)
-	if type(preset) ~= "table" then return false end
+	if not isTable(preset) then return false end
 
-	if type(preset.ID) == "string" then
+	if isString(preset.ID) then
 		for _, e in ipairs(CAMERA_LEVELS) do
 			local offset = preset[e]
-			if type(offset) ~= "table" then
+			if not isTable(offset) then
 				goto continue
 			end
 			for _, k in ipairs(OFFSETDATA_KEYS) do
-				if type(offset[k]) == "number" then
+				if isNumber(offset[k]) then
 					return true
 				end
 			end
@@ -887,7 +1076,7 @@ local function isPresetValid(preset)
 		end
 	end
 
-	if type(preset.Link) == "string" then
+	if isString(preset.Link) then
 		for k, _ in pairs(preset) do
 			if k ~= "Link" then
 				return false
@@ -901,15 +1090,14 @@ end
 
 ---Adds, updates, or removes a preset entry in the `_cameraPresets` table.
 ---@param key string # The key under which the preset is stored (usually the preset name without ".lua").
----@param preset CameraPreset|nil # The preset to store. If `nil`, the existing entry will be removed.
+---@param preset ICameraPreset? # The preset to store. If `nil`, the existing entry will be removed.
 ---@return boolean # True if the operation was successful (added, updated or removed), false if the key is invalid or the preset is not valid.
 local function setPresetEntry(key, preset)
-	if type(key) ~= "string" then return false end
+	if not isString(key) then return false end
 
 	if preset == nil then
 		if _cameraPresets[key] ~= nil then
 			_cameraPresets[key] = nil
-			_guiEditorPreset = nil
 		end
 		return true
 	end
@@ -920,6 +1108,17 @@ local function setPresetEntry(key, preset)
 	return true
 end
 
+---Checks whether a preset file with the given name exists in the appropriate folder.
+---Automatically adds the ".lua" extension if missing.
+---@param name string # The name of the preset file (with or without ".lua" extension).
+---@param isDefault boolean? # If true, checks the "./defaults" directory instead of "./presets".
+---@return boolean # True if the file exists, false otherwise.
+local function presetFileExists(name, isDefault)
+	if not isString(name) then return false end
+	local path = (isDefault and "defaults/" or "presets/") .. ensureLuaExt(name)
+	return fileExists(path)
+end
+
 ---Clears all currently loaded camera offset presets.
 local function purgePresets()
 	_cameraPresets = {}
@@ -927,9 +1126,9 @@ local function purgePresets()
 end
 
 ---Loads camera offset presets from `./defaults` (first) and `./presets` (second).
----Each `.lua` file must return a `CameraPreset` table with at least an `ID` field.
+---Each `.lua` file must return a `ICameraPreset` table with at least an `ID` field.
 ---Skips already loaded presets unless `refresh` is true (then clears and reloads all).
----@param refresh boolean|nil — If true, clears existing presets before loading (default: false).
+---@param refresh boolean? — If true, clears existing presets before loading (default: false).
 local function loadPresets(refresh)
 	local function loadFrom(path)
 		local files = dir("./" .. path)
@@ -942,9 +1141,9 @@ local function loadPresets(refresh)
 		local count = 0
 		for _, file in ipairs(files) do
 			local name = file.name
-			if not name or not fileIsLua(name) then goto continue end
+			if not name or not hasLuaExt(name) then goto continue end
 
-			local key = fileWithoutLuaExt(name)
+			local key = trimLuaExt(name)
 			if _cameraPresets[key] then
 				count = count + 1
 				LogE(DevLevel.BASIC, LogLevel.WARN, Text.LOG_SKIPPED_PRESET, key, path, name)
@@ -991,13 +1190,13 @@ end
 ---It serializes only values that differ from the default (unless saving as default).
 ---@param name string # The name of the preset file (with or without `.lua` extension).
 ---@param preset table # The preset data to save (must include an `ID` and valid offset data).
----@param allowOverwrite boolean|nil # Whether existing files may be overwritten.
----@param saveAsDefault boolean|nil # If true, saves the preset to the `./defaults` directory instead of `./presets`.
+---@param allowOverwrite boolean? # Whether existing files may be overwritten.
+---@param saveAsDefault boolean? # If true, saves the preset to the `./defaults` directory instead of `./presets`.
 ---@return boolean # Returns `true` on success, or `false` if writing failed or nothing needed to be saved.
 local function savePreset(name, preset, allowOverwrite, saveAsDefault)
-	if type(name) ~= "string" or type(preset) ~= "table" then return false end
+	if not isString(name) or not isTable(preset) then return false end
 
-	local path = (saveAsDefault and "defaults/" or "presets/") .. fileWithLuaExt(name)
+	local path = (saveAsDefault and "defaults/" or "presets/") .. ensureLuaExt(name)
 	if not allowOverwrite then
 		local check = io.open(path, "r")
 		if check then
@@ -1016,12 +1215,12 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 		local d = default[mode]
 		local sub = {}
 
-		if type(p) == "table" then
-			d = type(d) == "table" and d or {}
+		if isTable(p) then
+			d = isTable(d) and d or {}
 			for _, k in ipairs(OFFSETDATA_KEYS) do
-				if saveAsDefault or not floatEquals(p[k], d[k]) then
+				if saveAsDefault or not equals(p[k], d[k]) then
 					save = true
-					table.insert(sub, F("%s=%s", k, floatToString(p[k])))
+					table.insert(sub, F("%s=%s", k, stringOf(p[k])))
 				end
 			end
 		end
@@ -1037,9 +1236,9 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 		if not saveAsDefault then
 			local ok = os.remove(path)
 			if ok then
-				Log(LogLevel.WARN, Text.LOG_DELETE_SUCCESS, path)
+				LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_DELETE_SUCCESS, path)
 			end
-			return ok and setPresetEntry(name, nil)
+			return ok and setPresetEntry(name)
 		end
 
 		return false
@@ -1080,16 +1279,18 @@ local function getMetrics()
 	return width, _guiPadding
 end
 
----Adjusts an ABGR color by modifying its blue, green, and red (weird order in LUA) components.
----The alpha channel remains unchanged. Component values are clamped to 255.
+---Adjusts an ABGR color by modifying its alpha, blue, green, and red (weird order in LUA) components.
 ---@param col integer # The input color in 0xAARRGGBB format.
+---@param da integer # Amount to add to the alpha channel.
 ---@param db integer # Amount to add to the blue channel.
 ---@param dg integer # Amount to add to the green channel.
 ---@param dr integer # Amount to add to the red channel.
 ---@return integer # The resulting adjusted color in 0xAARRGGBB format.
-local function adjustColor(col, db, dg, dr)
-	if type(col) ~= "number" or type(db) ~= "number" or type(dg) ~= "number" or type(dr) ~= "number" then return 0 end
-	local a = bit32.band(bit32.rshift(col, 24), 0xff)
+local function adjustColor(col, da, db, dg, dr)
+	if not isNumber(col) or not isNumber(da) or not isNumber(db) or not isNumber(dg) or not isNumber(dr) then
+		return 0
+	end
+	local a = math.min(0xff, bit32.band(bit32.rshift(col, 24), 0xff) + da)
 	local b = math.min(0xff, bit32.band(bit32.rshift(col, 16), 0xff) + db)
 	local g = math.min(0xff, bit32.band(bit32.rshift(col, 8), 0xff) + dg)
 	local r = math.min(0xff, bit32.band(col, 0xff) + dr)
@@ -1100,38 +1301,86 @@ end
 ---Each subsequent variant increases brightness slightly on BGR channels.
 ---@param base integer # The base color in 0xAAGGBBRR format.
 ---@return integer, integer, integer # Returns three color variants: base, hover, and active.
-local function getThreeColorsFrom(base)
-	local hover = adjustColor(base, 32, 32, 32)
-	local active = adjustColor(base, 64, 64, 64)
+local function getThreeColorsFrom(idx, base)
+	local alpha = idx == ImGuiCol.Button and 0xff or 0
+	local hover = adjustColor(base, alpha, 32, 32, 32)
+	local active = adjustColor(base, alpha, 64, 64, 64)
 	return base, hover, active
 end
 
 ---Pushes a set of three related style colors to ImGui's style stack: base, hovered, and active.
----Calculated automatically from a single base color by brightening B, G, and R channels.
+---Calculated automatically from a single base color by brightening B, G, and R (weird order in LUA) channels.
 ---Returns the number of pushed styles so they can be popped accordingly.
 ---@param idx integer # The ImGuiCol index for the base color (e.g. ImGuiCol.FrameBg or ImGuiCol.Button).
 ---@param color integer # The base color in 0xAAGGBBRR format.
 ---@return integer # The number of style colors pushed (atm always 3). Returns 0 if arguments are invalid.
 local function pushStyleColors(idx, color)
-	if type(idx) ~= "number" or type(color) ~= "number" then return 0 end
+	if not isNumber(idx) or not isNumber(color) then return 0 end
 	local hoveredIdx = idx + 1
 	local activeIdx = idx + 2
-	local base, hover, active = getThreeColorsFrom(color)
+	local base, hover, active = getThreeColorsFrom(idx, color)
 	ImGui.PushStyleColor(idx, base)
 	ImGui.PushStyleColor(hoveredIdx, hover)
 	ImGui.PushStyleColor(activeIdx, active)
 	return 3
 end
 
+---Safely pops a number of ImGui style colors from the stack.
+---Calls `ImGui.PopStyleColor(num)` only if `num` is a positive integer.
+---@param num integer # The number of style colors to pop from the ImGui stack.
+local function popSyleColors(num)
+	if num <= 0 then return end
+	ImGui.PopStyleColor(num)
+end
+
 ---Displays a tooltip when the current UI item is hovered.
 ---@param text string # Text to display in the tooltip.
 local function addTooltip(text)
-	if not ImGui.IsItemHovered() or type(text) ~= "string" then return end
+	if not ImGui.IsItemHovered() or not isString(text) then return end
 	ImGui.BeginTooltip()
 	ImGui.PushTextWrapPos(420)
 	ImGui.Text(text)
 	ImGui.PopTextWrapPos()
 	ImGui.EndTooltip()
+end
+
+---Displays a modal popup with a text prompt and two buttons: Yes and No.
+---Returns true if the Yes button is clicked, false if No is clicked, and nil if the popup was not active.
+---@param id string # The unique popup ID.
+---@param text string # The message to display in the popup.
+---@param yesBtnColor? number # Optional color index for the Yes button (ImGuiCol style constant).
+---@param noBtnColor? number # Optional color index for the No button (ImGuiCol style constant).
+---@return boolean? # true if Yes clicked, false if No clicked, nil if popup not active.
+local function addPopupYesNo(id, text, yesBtnColor, noBtnColor)
+	if not id or not ImGui.BeginPopup(id) then return nil end
+
+	local result = nil
+
+	ImGui.Text(text)
+	ImGui.Dummy(0, 2)
+	ImGui.Separator()
+	ImGui.Dummy(0, 2)
+
+	---@cast yesBtnColor number
+	local pushedStylesYes = isNumber(yesBtnColor) and pushStyleColors(ImGuiCol.Button, yesBtnColor) or 0
+	if ImGui.Button(Text.GUI_YES, 80, 30) then
+		result = true
+		ImGui.CloseCurrentPopup()
+	end
+	popSyleColors(pushedStylesYes)
+
+	ImGui.SameLine()
+
+	---@cast noBtnColor number
+	local pushedStylesNo = isNumber(noBtnColor) and pushStyleColors(ImGuiCol.Button, noBtnColor) or 0
+	if ImGui.Button(Text.GUI_NO, 80, 30) then
+		result = false
+		ImGui.CloseCurrentPopup()
+	end
+	popSyleColors(pushedStylesNo)
+
+	ImGui.EndPopup()
+	return result
 end
 
 --This event is triggered when the CET environment initializes for a particular game session.
@@ -1159,7 +1408,6 @@ registerForEvent("onInit", function()
 	--This event can fire even if the player is already mounted, so we guard with `_isVehicleMounted`.
 	Observe("VehicleComponent", "OnMountingEvent", function()
 		if not _isEnabled or _isVehicleMounted then return end
-		_guiEditorPreset = nil
 		applyPreset()
 	end)
 
@@ -1167,7 +1415,6 @@ registerForEvent("onInit", function()
 	Observe("VehicleComponent", "OnUnmountingEvent", function()
 		if not _isEnabled then return end
 		_isVehicleMounted = false
-		_guiEditorPreset = nil
 		restoreModifiedPresets()
 	end)
 
@@ -1176,8 +1423,6 @@ registerForEvent("onInit", function()
 	Observe("PlayerPuppet", "OnTakeControl", function(self)
 		if not _isEnabled or self:GetEntityID().hash ~= 1 then return end
 		_isVehicleMounted = false
-		_guiEditorPreset = nil
-		_guiEditorUnsavedChanges = {}
 	end)
 end)
 
@@ -1209,13 +1454,12 @@ registerForEvent("onDraw", function()
 	addTooltip(Text.GUI_MOD_TOGGLE_TOOLTIP)
 	if isEnabled ~= _isEnabled then
 		_isEnabled = isEnabled
-		_guiEditorPreset = nil
-		_guiEditorUnsavedChanges = {}
 		if isEnabled then
 			loadPresets()
 			applyPreset()
 			LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_MOD_ENABLED)
 		else
+			_guiEditorPresetData = {}
 			restoreAllPresets()
 			purgePresets()
 			LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_MOD_DISABLED)
@@ -1231,8 +1475,7 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
 	if ImGui.Button(Text.GUI_PRESETS_RELOAD, 192, 24) then
-		_guiEditorPreset = nil
-		_guiEditorUnsavedChanges = {}
+		_guiEditorPresetData = {}
 		loadPresets(true)
 		restoreAllPresets()
 		applyPreset()
@@ -1252,7 +1495,7 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(0, 8)
 
 	--Table showing vehicle name, camera ID and more — if certain conditions are met.
-	local vehicle, name, appName, id
+	local vehicle, name, appName, id, key
 	for _, fn in ipairs({
 		function()
 			return DevMode > DevLevel.DISABLED
@@ -1272,6 +1515,10 @@ registerForEvent("onDraw", function()
 		function()
 			id = getVehicleCameraID(vehicle)
 			return id
+		end,
+		function()
+			key = name ~= appName and findPresetKey(name, appName) or findPresetKey(name) or name
+			return key
 		end
 	}) do
 		if not fn() then
@@ -1281,24 +1528,24 @@ registerForEvent("onDraw", function()
 		end
 	end
 
-	local presetKey
+	local editor = deep(_guiEditorPresetData, F("%s*%s", name, appName))
+	---@cast editor IEditorPresetData
+	if not editor.CName then
+		editor.CName = key
+	end
+
 	if ImGui.BeginTable("InfoTable", 2, ImGuiTableFlags.Borders) then
 		ImGui.TableSetupColumn(Text.GUI_TABLE_HEADER_KEY, ImGuiTableColumnFlags.WidthFixed, -1)
 		ImGui.TableSetupColumn(Text.GUI_TABLE_HEADER_VALUE, ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
-		presetKey = name == appName and findPresetKey(name) or findPresetKey(name, appName)
-		if not _guiEditorPreset then
-			_guiEditorPresetDef = nil
-			_guiEditorPresetName = nil
-		end
-
+		local keyValue = (editor.CName ~= key or presetFileExists(editor.CName)) and editor.CName or id
 		local dict = {
 			{ key = Text.GUI_TABLE_LABEL_VEHICLE,    value = name },
 			{ key = Text.GUI_TABLE_LABEL_APPEARANCE, value = appName },
 			{ key = Text.GUI_TABLE_LABEL_CAMERAID,   value = id },
-			{ key = Text.GUI_TABLE_LABEL_PRESET,     value = presetKey or id },
-			{ key = Text.GUI_TABLE_LABEL_IS_DEFAULT, value = presetKey == nil and Text.GUI_TRUE or Text.GUI_FALSE }
+			{ key = Text.GUI_TABLE_LABEL_PRESET,     value = keyValue },
+			{ key = Text.GUI_TABLE_LABEL_IS_DEFAULT, value = key == nil and Text.GUI_TRUE or Text.GUI_FALSE }
 		}
 		for _, item in ipairs(dict) do
 			ImGui.TableNextRow()
@@ -1308,29 +1555,26 @@ registerForEvent("onDraw", function()
 			local text = item.value or Text.GUI_NONE
 			ImGui.TableSetColumnIndex(1)
 			if item.key == Text.GUI_TABLE_LABEL_PRESET then
-				local value = _guiEditorPresetName or text
-				local file = fileWithLuaExt(value)
+				local value = text
+				local file = ensureLuaExt(value)
 
 				local width = ImGui.CalcTextSize(file) + 8
 				ImGui.PushItemWidth(width)
 
 				local isNotDefault = value ~= id
-				local pushedStyles = 0
-				if isNotDefault then
-					pushedStyles = pushStyleColors(ImGuiCol.FrameBg, 0xff505020)
-				end
-
+				local pushedStyles = isNotDefault and pushStyleColors(ImGuiCol.FrameBg, Colors.CUSTOM) or 0
 				local newValue, changed = ImGui.InputText("##Preset", file, 96)
 				if changed and newValue then
-					_guiEditorPresetName = newValue
+					editor.CName = trimLuaExt(newValue)
 				end
-
-				if pushedStyles > 0 then
-					ImGui.PopStyleColor(pushedStyles)
-				end
-
-				addTooltip(F(Text.GUI_TABLE_VALUE_PRESET_TOOLTIP, isNotDefault and file or fileWithLuaExt(name), name,
-					appName, nameShortenSmart(name), nameShortenSmart(appName)))
+				popSyleColors(pushedStyles)
+				addTooltip(
+					F(Text.GUI_TABLE_VALUE_PRESET_TOOLTIP,
+						isNotDefault and file or ensureLuaExt(name),
+						name,
+						appName,
+						chopUnderscoreParts(name),
+						chopUnderscoreParts(appName)))
 
 				ImGui.PopItemWidth()
 			else
@@ -1342,7 +1586,7 @@ registerForEvent("onDraw", function()
 	end
 
 	--Camera preset editor allowing adjustments to Angle, X, Y, and Z coordinates — if certain conditions are met.
-	local preset = _guiEditorPreset or getPreset(id)
+	local preset = editor.Current or getPreset(id)
 	if not preset then
 		Log(LogLevel.WARN, Text.LOG_NO_PRESET_FOUND)
 
@@ -1350,20 +1594,40 @@ registerForEvent("onDraw", function()
 		ImGui.End()
 		return
 	end
-	if not _guiEditorPreset then
-		_guiEditorPreset = preset
+
+	if editor.RefreshPending or not editor.Origin then
+		editor.RefreshPending = false
+
+		local copy = clone(preset)
+		editor.Origin = copy
+		editor.OHash = hash(copy)
+
+		if editor.SavePending ~= true then
+			copy = clone(copy)
+			editor.Source = copy
+			editor.SHash = hash(copy)
+		end
+
+		editor.Current = preset
+
+		if not editor.Default then
+			local original = getDefaultPreset(preset)
+			---@cast original ICameraPreset
+			copy = clone(original)
+			copy.IsDefault = nil
+
+			editor.Default = copy
+			editor.DHash = hash(copy)
+		end
 	end
 
-	local original = _guiEditorPresetDef or getDefaultPreset(preset)
-	if not original then
-		Log(LogLevel.ERROR, Text.LOG_NO_ORIGINAL_PRESET, id, name)
+	local default = editor.Default
+	if not default then
+		Log(LogLevel.ERROR, Text.LOG_NO_DEFAULT_PRESET, id, name)
 
-		--GUI ends early — original preset not found.
+		--GUI ends early — default preset not found.
 		ImGui.End()
 		return
-	end
-	if not _guiEditorPresetDef then
-		_guiEditorPresetDef = original
 	end
 
 	if ImGui.BeginTable("CameraOffsetEditor", 5, ImGuiTableFlags.Borders) then
@@ -1388,17 +1652,14 @@ registerForEvent("onDraw", function()
 			Text.GUI_TABLE_VALUE_Z_TOOLTIP
 		}
 		for _, level in ipairs(CAMERA_LEVELS) do
-			local data = preset[level]
-			if type(data) ~= "table" then goto continue end
-
 			ImGui.TableNextRow()
 			ImGui.TableSetColumnIndex(0)
 			ImGui.Text(level)
 
 			for i, field in ipairs(OFFSETDATA_KEYS) do
-				local orgValue = get(original, 0, level, field)
-				local curValue = get(data, orgValue, field)
-				local speed = pick(i, 1, 0.005)
+				local defValue = get(default, 0, level, field)
+				local curValue = get(preset, defValue, level, field)
+				local speed = pick(i, 1, 5e-3)
 				local min = pick(i, -45, -5, -10, 0)
 				local max = pick(i, 90, 5, 10, 32)
 				local format = pick(i, "%.0f", "%.3f")
@@ -1406,20 +1667,15 @@ registerForEvent("onDraw", function()
 				ImGui.TableSetColumnIndex(i)
 				ImGui.PushItemWidth(-1)
 
-				local pushedStyles = 0
-				if not floatEquals(curValue, orgValue) then
-					pushedStyles = pushStyleColors(ImGuiCol.FrameBg, 0xff505020)
-				end
-
+				local pushedStyles = not equals(curValue, defValue) and pushStyleColors(ImGuiCol.FrameBg, Colors.CUSTOM) or
+					0
 				local newValue = ImGui.DragFloat(F("##%s_%s", level, field), curValue, speed, min, max, format)
-				if not floatEquals(newValue, curValue) then
-					_guiEditorUnsavedChanges[name] = true
-					data[field] = math.min(math.max(newValue, min), max)
+				if not equals(newValue, curValue) then
+					newValue = math.min(math.max(newValue, min), max)
+					deep(preset, level)[field] = newValue
+					editor.RefreshPending = true
 				end
-
-				if pushedStyles > 0 then
-					ImGui.PopStyleColor(pushedStyles)
-				end
+				popSyleColors(pushedStyles)
 
 				local tip = tooltips[i]
 				if tip then
@@ -1428,63 +1684,86 @@ registerForEvent("onDraw", function()
 
 				ImGui.PopItemWidth()
 			end
-
-			::continue::
 		end
 
 		ImGui.EndTable()
 		ImGui.Dummy(0, 1)
 	end
 
-	--The validated preset key, required for the apply and save buttons.
-	local validKey = validatePresetKey(name, appName, presetKey or name, _guiEditorPresetName)
+	if editor.RefreshPending then
+		editor.RefreshPending = false
+		editor.Current = preset
+		editor.CHash = hash(editor.Current)
+		editor.ApplyPending = editor.CHash ~= editor.OHash
+		editor.SavePending = editor.CHash ~= editor.SHash
+		if editor.SavePending then
+			editor.SaveIsRestore = editor.CHash == editor.DHash
+		end
+	end
+	key = validatePresetKey(name, appName, key or name, editor.CName)
+	if key ~= editor.CName then
+		editor.CName = key
+	end
 
 	--Button to apply previously configured values in-game.
+	local color = editor.SaveIsRestore and Colors.RESTORE or Colors.CONFIRM
+	local pushedStyles = editor.ApplyPending and pushStyleColors(ImGuiCol.Button, color) or 0
 	if ImGui.Button(Text.GUI_PRESET_APPLY, contentWidth, 24) then
-		_cameraPresets[validKey] = preset
-		_guiEditorPresetName = validKey
-		LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PRESET_UPDATED, validKey)
+		editor.RefreshPending = true
+		editor.ApplyPending = false
+		_cameraPresets[key] = preset
+		LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PRESET_UPDATED, key)
 	end
+	popSyleColors(pushedStyles)
 	addTooltip(Text.GUI_PRESET_APPLY_TOOLTIP)
 	ImGui.Dummy(0, 1)
 
 	--Button to save configured values to a file for future automatic use.
-	local pushedStyles = 0
-	if _guiEditorUnsavedChanges[name] then
-		pushedStyles = pushStyleColors(ImGuiCol.Button, 0xff204050)
-	end
+	local overwritePopup = "ConfirmOverwrite_" .. key
+	local saveConfirmed = false
+	pushedStyles = editor.SavePending and pushStyleColors(ImGuiCol.Button, color) or 0
 	if ImGui.Button(Text.GUI_PRESET_SAVE, contentWidth, 24) then
-		_cameraPresets[validKey] = preset
-		_guiEditorPresetName = validKey
-		Log(LogLevel.INFO, Text.LOG_PRESET_UPDATED, validKey)
-		if savePreset(validKey, preset, _guiEditorAllowOverwrite) then
-			_guiEditorUnsavedChanges[name] = nil
-			_guiEditorAllowOverwrite = false
+		_cameraPresets[key] = preset
+		editor.RefreshPending = true
+		editor.ApplyPending = false
+		Log(LogLevel.INFO, Text.LOG_PRESET_UPDATED, key)
+
+		if presetFileExists(key) then
+			_guiOverwriteConfirm = true
+			ImGui.OpenPopup(overwritePopup)
 		else
-			LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_PRESET_NOT_SAVED, validKey)
+			saveConfirmed = true
 		end
 	end
-	if pushedStyles > 0 then
-		ImGui.PopStyleColor(pushedStyles)
-	end
-	addTooltip(F(Text.GUI_PRESET_SAVE_TOOLTIP, validKey))
-	ImGui.Dummy(0, 2)
+	popSyleColors(pushedStyles)
+	addTooltip(F(editor.SaveIsRestore and Text.GUI_PRESET_RESTORE_TOOLTIP or Text.GUI_PRESET_SAVE_TOOLTIP, key))
 
-	--Checkbox to toggle allowing file overwrites.
-	ImGui.Dummy(controlPadding, 0)
-	ImGui.SameLine()
-	_guiEditorAllowOverwrite = ImGui.Checkbox(Text.GUI_ALLOW_OVERWRITE, _guiEditorAllowOverwrite)
-	addTooltip(Text.GUI_ALLOW_OVERWRITE_TOOLTIP)
-	ImGui.Dummy(0, 2)
+	if _guiOverwriteConfirm then
+		local confirmed = addPopupYesNo(overwritePopup, F(Text.GUI_OVERWRITE_CONFIRM, key), Colors.CONFIRM)
+		if confirmed ~= nil then
+			_guiOverwriteConfirm = false
+			saveConfirmed = confirmed
+		end
+	end
+	if saveConfirmed then
+		saveConfirmed = false
+		if savePreset(key, preset, true) then
+			editor.SavePending = false
+		else
+			LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_PRESET_NOT_SAVED, key)
+		end
+	end
+
+	ImGui.Dummy(0, 4)
 
 	--Button to open Preset File Manager
 	local x, y, w, h
 	ImGui.Separator()
-	ImGui.Dummy(0, 2)
+	ImGui.Dummy(0, 4)
 	if ImGui.Button(Text.GUI_PRESET_MANAGER, contentWidth, 24) then
 		x, y = ImGui.GetWindowPos()
 		w, h = ImGui.GetWindowSize()
-		_fileManToggle = not _fileManToggle
+		_guiFileManToggle = not _guiFileManToggle
 	end
 	ImGui.Dummy(0, 2)
 
@@ -1492,11 +1771,11 @@ registerForEvent("onDraw", function()
 	ImGui.End()
 
 	--Preset File Manager window
-	if not _fileManToggle then return end
+	if not _guiFileManToggle then return end
 
 	local files = dir("./presets")
 	if not files then
-		_fileManToggle = false
+		_guiFileManToggle = false
 		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DIR_NOT_EXISTS, "presets")
 		return
 	end
@@ -1507,8 +1786,8 @@ registerForEvent("onDraw", function()
 	end
 
 	local flags = bit32.bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove)
-	_fileManToggle = ImGui.Begin(Text.GUI_FMAN_TITLE, _fileManToggle, flags)
-	if not _fileManToggle then return end
+	_guiFileManToggle = ImGui.Begin(Text.GUI_FMAN_TITLE, _guiFileManToggle, flags)
+	if not _guiFileManToggle then return end
 
 	local anyFiles = false
 	if ImGui.BeginTable("PresetFilesTable", 2, ImGuiTableFlags.Borders) then
@@ -1516,9 +1795,9 @@ registerForEvent("onDraw", function()
 		ImGui.TableSetupColumn(Text.GUI_FMAN_HEADER_ACTIONS, ImGuiTableColumnFlags.WidthFixed)
 		ImGui.TableHeadersRow()
 
-		for _, file in ipairs(files) do
-			name = file.name
-			if not fileIsLua(name) then goto continue end
+		for _, f in ipairs(files) do
+			local file = f.name
+			if not hasLuaExt(file) then goto continue end
 
 			anyFiles = true
 
@@ -1526,50 +1805,46 @@ registerForEvent("onDraw", function()
 			ImGui.TableSetColumnIndex(0)
 
 			local columnWidth = ImGui.GetColumnWidth(0) - 4
-			local textWidth = ImGui.CalcTextSize(name)
+			local textWidth = ImGui.CalcTextSize(file)
 			if columnWidth < textWidth then
-				local short = name
+				local short = file
 				local dots = "..."
 				local cutoff = columnWidth - ImGui.CalcTextSize(dots)
 				while #short > 0 and ImGui.CalcTextSize(short) > cutoff do
 					short = string.sub(short, 1, -2)
 				end
 				ImGui.Text(short .. dots)
-				addTooltip(name)
+				addTooltip(file)
 			else
-				ImGui.Text(name)
+				ImGui.Text(file)
 			end
 
 			ImGui.TableSetColumnIndex(1)
-			if ImGui.Button(F(Text.GUI_FMAN_DELETE_BUTTON, name)) then
-				ImGui.OpenPopup("ConfirmDelete_" .. name)
+			local popup = "ConfirmDelete_" .. file
+			if ImGui.Button(F(Text.GUI_FMAN_DELETE_BUTTON, file)) then
+				ImGui.OpenPopup(popup)
 			end
 
-			if ImGui.BeginPopup("ConfirmDelete_" .. name) then
-				ImGui.Text(F(Text.GUI_FMAN_DELETE_CONFIRM, name))
-				ImGui.Dummy(0, 2)
-				ImGui.Separator()
-				ImGui.Dummy(0, 2)
-				local pushedStyles = pushStyleColors(ImGuiCol.Button, 0xff202050)
-				if ImGui.Button(Text.GUI_YES, 80, 30) then
-					local ok = os.remove("presets/" .. name)
-					if ok then
-						local key = fileWithoutLuaExt(name)
-						setPresetEntry(key, nil)
-						LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_DELETE_SUCCESS, name)
-					else
-						LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_DELETE_FAILURE, name)
+			if addPopupYesNo(popup, F(Text.GUI_FMAN_DELETE_CONFIRM, file), Colors.DELETE) then
+				local ok = os.remove("presets/" .. file)
+				if ok then
+					local k = trimLuaExt(file)
+					for n, _ in pairs(_guiEditorPresetData) do
+						local parts = split(n, "*")
+						if #parts < 2 then goto continue end
+
+						local vName, aName = parts[1], parts[2]
+						if startsWith(vName, k) or startsWith(aName, k) then
+							_guiEditorPresetData[n] = nil
+						end
+
+						::continue::
 					end
-					ImGui.CloseCurrentPopup()
+					setPresetEntry(k)
+					LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_DELETE_SUCCESS, file)
+				else
+					LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_DELETE_FAILURE, file)
 				end
-				if pushedStyles > 0 then
-					ImGui.PopStyleColor(pushedStyles)
-				end
-				ImGui.SameLine()
-				if ImGui.Button(Text.GUI_NO, 80, 30) then
-					ImGui.CloseCurrentPopup()
-				end
-				ImGui.EndPopup()
 			end
 
 			::continue::
