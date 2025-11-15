@@ -1,1 +1,1 @@
-return{Link="nsx_base"}
+return{ID="4w_911",Close={y=0.25,z=1.1},Medium={y=-0.1,z=1.6},Far={y=0.2}}

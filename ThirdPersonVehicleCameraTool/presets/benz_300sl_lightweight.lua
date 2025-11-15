@@ -1,1 +1,1 @@
-return{Link="benz_300sl_base"}
+return{ID="4w_911",Close={y=-0.15,z=1.15},Medium={y=-0.25,z=1.65},Far={y=-0.1}}

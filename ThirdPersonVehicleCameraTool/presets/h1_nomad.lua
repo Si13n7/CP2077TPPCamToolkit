@@ -1,1 +1,1 @@
-return{Link="h1_base"}
+return{ID="4w_Thorton_Colby_Pickup",Close={y=-0.2,z=1.75},Medium={y=-0.3,z=2.4},Far={y=-0.4,z=2.75}}
