@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-09-08, 23:13 UTC+01:00 (MEZ)
+Version: 2025-09-15, 12:46 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -67,6 +67,8 @@ return {
 	--GUI: ⚙️ Global Options
 	GUI_GOPT_FOV = "Field Of View",
 	GUI_GOPT_NAC = "No Auto-Centering",
+	GUI_GOPT_NVAN = "No Vanilla Presets",
+	GUI_GOPT_NVAN_TIP = "Some vanilla vehicles have unusual camera settings that this mod corrects. Enable this option to leave vanilla vehicles untouched.\n\nKeep in mind that changes only take effect after exiting and re-entering the vehicle.",
 	GUI_GOPT_TIP = "Keep in mind that changes only take effect after exiting and re-entering the vehicle.\n\nFor certain vehicles, you may also need to disable and re-enable the mod via the checkbox—while not sitting in any vehicle—to apply your changes.",
 
 	--GUI: 🗂️ Preset File Manager

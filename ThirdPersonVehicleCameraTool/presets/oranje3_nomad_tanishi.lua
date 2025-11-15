@@ -1,0 +1,1 @@
+return{ID="v_utility4_centurion",Close={y=0,d=-0.3},Medium={y=0,d=1.2},Far={y=0,d=4.6}}

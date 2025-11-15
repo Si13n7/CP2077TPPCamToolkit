@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-09-08, 23:13 UTC+01:00 (MEZ)
+Version: 2025-09-15, 12:46 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -55,12 +55,19 @@ ______________________________________________
 ---@field Revision number # Revision number (optional, defaults to 0 if missing).
 
 ---Represents a default parameter structure.
----@class IDefaultParamData
+---@class IParamData
 ---@field DisplayName string # The display name.
 ---@field Value any # The current value.
 ---@field Default any # The game's default value.
 ---@field Min number? # The minimum value.
 ---@field Max number? # The maximum value.
+---@field IsSpecial boolean? # Determines whether this is treated as a mod option rather than a TweakDB default parameter of the game.
+
+---Represents a global extra options structure.
+---@class IOptionData
+---@field DisplayName string # The display name.
+---@field Value any # The current value.
+---@field Default any # The game's default value.
 
 ---Represents a camera offset configuration with rotation and positional data.
 ---@class IOffsetData
@@ -78,6 +85,7 @@ ______________________________________________
 ---@field Far IOffsetData? # The offset data for far camera view.
 ---@field IsDefault boolean? # Determines whether this camera preset is a default one.
 ---@field IsJoined boolean? # Determines whether this camera preset was newly generated as a default.
+---@field IsVanilla boolean? # Determines whether this camera preset comes from a vanilla vehicle. This flag must be set manually in the file and is used by the option to disable all vanilla presets at once.
 
 ---Represents usage statistics for a camera preset.
 ---@class IPresetUsage
@@ -370,8 +378,8 @@ local padding_width = 0
 ---@type boolean
 local padding_locked = false
 
----Global default parameter values.
----@type table<string, IDefaultParamData>
+---Global default parameter and special option values.
+---@type table<string, IParamData>
 local global_params = {
 	fov = {
 		DisplayName = Text.GUI_GOPT_FOV,
@@ -382,9 +390,16 @@ local global_params = {
 	lockedCamera = {
 		DisplayName = Text.GUI_GOPT_NAC,
 		Default = false
+	},
+
+	--Special options.
+	noVanilla = {
+		DisplayName = Text.GUI_GOPT_NVAN,
+		Tooltip = Text.GUI_GOPT_NVAN_TIP,
+		Default = false,
+		IsSpecial = true
 	}
 }
-
 ---Stores original custom parameter values before resetting them to global defaults.
 ---Keys are TweakDB paths (string), and values are the original values.
 ---Allows potential restoration of vehicle-specific parameters on shutdown.
@@ -1508,7 +1523,12 @@ local function updateDefaultParams(restore)
 		for _, baseKey in ipairs(DefaultParamKeys) do
 			local key = baseKey .. "." .. varName
 			local value = TweakDB:GetFlat(key)
-			if value == nil then goto continue end
+			if value == nil then
+				if data.IsSpecial then
+					data.Value = data.Value or data.Default
+				end
+				goto continue
+			end
 
 			local isNum = isNumber(value)
 			local hasMinMax = areNumber(data.Min, data.Max)
@@ -1871,21 +1891,31 @@ end
 ---@return string? # The matching key from `camera_presets`, or `nil` if no match was found.
 local function findPresetKey(...)
 	local id = getVehicleCameraID()
+	local length, result
 	for pass = 1, 2 do
+		if pass == 2 then
+			length = 0
+		end
 		for i = 1, select("#", ...) do
 			local search = select(i, ...)
 			for key, preset in pairs(camera_presets) do
 				if preset.ID ~= id then goto continue end
 
-				local exact = pass == 1 and search == key
-				local partial = pass == 2 and startsWith(search, key)
-				if exact or partial then return key end
+				if pass == 1 and search == key then
+					return key
+				elseif pass == 2 and startsWith(search, key) then
+					local len = #key
+					if len > length then
+						length = len
+						result = key
+					end
+				end
 
 				::continue::
 			end
 		end
 	end
-	return nil
+	return result
 end
 
 ---Validates a new preset key based on the given vehicle and appearance names.
@@ -2050,6 +2080,10 @@ local function applyPreset(preset, id)
 
 		local pset = camera_presets[key]
 		if not isTableValid(pset) then return end
+
+		if pset.IsVanilla and get(global_params, false, "noVanilla", "Value") then
+			return
+		end
 
 		resetCustomDefaultParams(key)
 		resetCustomCameraVars(key, pset)
@@ -3031,21 +3065,29 @@ local function openGlobalOptionsWindow(scale, contentWidth, controlPadding, heig
 			end
 		elseif isNumber(data.Value) then
 			local label = "##" .. key
-			if data.Min and data.Max then
+			if areNumber(data.Min, data.Max) then
 				ImGui.PushItemWidth(floor(24 * scale) * #tostring(data.Max) / 2)
 				local value = ImGui.DragFloat(label, data.Value, 0.1, data.Min, data.Max, "%.0f")
 				if value ~= data.Value then
 					data.Value = value
 				end
 			else
-				--Unsupported type.
-				local _ = ImGui.InputText(label, data.Value)
+				--Fallback.
+				local value = ImGui.InputText(label, tostring(data.Value))
+				if isNumeric(value) then
+					data.Value = tonumber(value)
+				end
 			end
 		else
+			--Unsuported type.
 			ImGui.Text(tostring(data.Value))
 		end
 
-		addTooltip(scale, Text.GUI_GOPT_TIP)
+		if isStringValid(data.Tooltip) then
+			addTooltip(scale, data.Tooltip)
+		else
+			addTooltip(scale, Text.GUI_GOPT_TIP)
+		end
 	end
 
 	ImGui.EndTable()
