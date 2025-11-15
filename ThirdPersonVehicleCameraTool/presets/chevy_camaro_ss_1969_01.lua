@@ -1,0 +1,1 @@
+return{ID="4w_Shion",Close={y=0.15},Medium={y=0.1}}
