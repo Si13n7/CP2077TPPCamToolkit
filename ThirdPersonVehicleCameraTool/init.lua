@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-05-07, 00:45 UTC+01:00 (MEZ)
+Version: 2025-05-07, 20:30 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -69,6 +69,12 @@ ______________________________________________
 ---@field Link string? # The name of another camera preset to link to (if applicable).
 ---@field IsDefault boolean? # Determines whether this camera preset is a default one.
 ---@field IsJoined boolean? # Determines whether this camera preset was newly generated as a default.
+
+---Tracks usage statistics for a camera preset.
+---@class IPresetUsage
+---@field First number # Timestamp of the first time this preset was applied.
+---@field Last number # Timestamp of the most recent time this preset was applied.
+---@field Total number # Total number of times this preset has been applied.
 
 ---Represents a single camera preset entry used in the editor, including its metadata and file state.
 ---@class IEditorPreset
@@ -244,6 +250,10 @@ local used_presets = {}
 ---@type table<string, ICameraPreset>
 local camera_presets = {}
 
+---A mapping of preset names to their usage statistics.
+---@type table<string, IPresetUsage>
+local preset_usage = {}
+
 ---Holds per-vehicle editor state for all mounted and recently edited vehicles.
 ---The key is always the vehicle name and appearance name, separated by an asterisk (*).
 ---Each entry tracks editor data and preset version states for the given vehicle.
@@ -264,7 +274,7 @@ local file_man_open = false
 
 ---Search query entered in the Preset File Manager.
 ---@type string?
-local file_search
+local file_man_search
 
 --#endregion
 
@@ -1607,6 +1617,14 @@ local function applyPreset(preset, id, count)
 		if isTableNotEmpty(pre) then
 			resetCustomCameraParams(key)
 			applyPreset(camera_presets[key], cid, 0)
+
+			--Tracks preset usage
+			local usage = get(preset_usage, {}, key) ---@cast usage IPresetUsage
+			local now = os.time()
+			usage.First = usage.First or now
+			usage.Last = now
+			usage.Total = usage.Total and usage.Total + 1 or 1
+			preset_usage[key] = usage
 		end
 
 		return
@@ -1726,6 +1744,9 @@ local function setPresetEntry(key, preset)
 	if preset == nil then
 		if camera_presets[key] ~= nil then
 			camera_presets[key] = nil
+		end
+		if preset_usage[key] ~= nil then
+			preset_usage[key] = nil
 		end
 		return true
 	end
@@ -1931,6 +1952,48 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	return true
 end
 
+---Loads usage history data from a `history.lua` and replaces `preset_usage`.
+local function loadPresetUsage()
+	local path = ".usage"
+	if not fileExists(path) then return end
+	local chunk = loadfile(path)
+	if not chunk then return end
+	local ok, data = pcall(chunk)
+	if ok and isTable(data) then
+		preset_usage = data
+	end
+end
+
+---Saves the `preset_usage` table to `history.lua` on disk.
+local function savePresetUsage()
+	if not isTable(preset_usage) then return end
+
+	local path = ".usage"
+	if not next(preset_usage) then
+		if fileExists(path) then
+			os.remove(path)
+		end
+		return
+	end
+
+	local parts = { "return{" }
+	for k, v in opairs(preset_usage) do
+		local key = k:match("^[A-Za-z_][A-Za-z0-9_]*$") ~= nil and k or format("[%q]", k)
+		insert(parts, format("%s={First=%d,Last=%d,Total=%d},", key, v.First, v.Last, v.Total))
+	end
+	local last = parts[#parts]
+	if last and last:sub(-1) == "," then
+		parts[#parts] = last:sub(1, -2)
+	end
+	insert(parts, "}")
+
+	local file = io.open(path, "w")
+	if not file then return end
+
+	file:write(concat(parts))
+	file:close()
+end
+
 --#endregion
 
 --#region 🧪 Preset Editor
@@ -2015,7 +2078,7 @@ local function clearLastEditorBundle()
 	local flux = get(bundle, {}, "Flux")
 	local key = flux.Key
 	local hash = flux.Token
-	if key and hash and hash == get(bundle, {}, "Nexus").Token then
+	if key and hash and not presetFileExists(key) and hash == get(bundle, {}, "Nexus").Token then
 		camera_presets[key] = nil
 
 		log(LogLevels.INFO, 0xbc48, Text.LOG_DEL_SUCCESS, key)
@@ -2113,16 +2176,19 @@ end
 ---@return number scale # UI scale factor (fontSize / 18).
 ---@return number padding # Computed horizontal padding (pixels), at least 10 * scale when unlocked.
 local function getMetrics()
-	local w  = ImGui.GetContentRegionAvail()
+	local w = ImGui.GetContentRegionAvail()
 
 	local st = ImGui.GetStyle()
 	local sp = st.ItemSpacing.x
 	local hf = ceil(w * 0.5 - (sp * 0.5))
 
-	local h  = ImGui.GetFontSize()
-	local s  = h / 18
+	local h = ImGui.GetFontSize()
+	local s = h / 18
 
-	if padding_locked and isNumber(padding_width) then
+	if padding_width == 0 then
+		w = 230 * s
+	end
+	if padding_locked then
 		return w, hf, s, padding_width
 	end
 
@@ -2273,8 +2339,9 @@ end
 ---If a single string is passed, displays it as wrapped text.
 ---If multiple arguments are passed, they are interpreted as alternating key-value pairs for a tooltip table.
 ---If a table is passed, it will be unpacked as key-value pairs.
+---@param scale number? # The resolution scale for wrapping text.
 ---@param ... string|table # Either a single string, a table of pairs, or a sequence of key-value pairs.
-local function addTooltip(...)
+local function addTooltip(scale, ...)
 	if not ImGui.IsItemHovered() then return end
 
 	local count = select("#", ...)
@@ -2297,14 +2364,24 @@ local function addTooltip(...)
 
 	local item = select(1, ...)
 	if item == nil then return end
+
 	if isString(item) then
 		ImGui.BeginTooltip()
-		ImGui.PushTextWrapPos(420)
+
+		local wrap = scale and ceil(420 * scale) or nil
+		if wrap then
+			ImGui.PushTextWrapPos(wrap)
+		end
+
 		ImGui.Text(item)
-		ImGui.PopTextWrapPos()
+
+		if wrap then
+			ImGui.PopTextWrapPos()
+		end
+
 		ImGui.EndTooltip()
 	elseif isTable(item) then
-		addTooltip(unpack(item))
+		addTooltip(nil, unpack(item))
 	end
 end
 
@@ -2350,9 +2427,251 @@ local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	return result
 end
 
+---Adds a button to open the Preset File Manager and returns the current window geometry if clicked.
+---@param contentWidth number # The width of the content region to size the button.
+---@param heightPadding number # Padding above the button.
+---@param halfHeightPadding number # Padding below the button.
+---@param buttonHeight number # Height of the button.
+---@return number? x # The window X position when the button was clicked.
+---@return number? y # The window Y position when the button was clicked.
+---@return number? w # The window width when the button was clicked.
+---@return number? h # The window height (clamped to at least 400) when the button was clicked.
+local function addFileManButton(contentWidth, heightPadding, halfHeightPadding, buttonHeight)
+	local x, y, w, h
+
+	ImGui.Separator()
+	ImGui.Dummy(0, heightPadding)
+	if ImGui.Button(Text.GUI_OPEN_FMAN, contentWidth, buttonHeight) then
+		x, y = ImGui.GetWindowPos()
+		w, h = ImGui.GetWindowSize()
+		h = max(h, 400)
+		file_man_open = not file_man_open
+	end
+	ImGui.Dummy(0, halfHeightPadding)
+
+	return x, y, w, h
+end
+
+---Draws and manages the Preset File Manager window.
+---Displays all available preset files, allows file deletion, shows usage stats, and supports live search filtering.
+---@param scale number # UI scale factor based on current DPI and font size.
+---@param controlPadding number # Left padding used to center content within the window.
+---@param halfHeightPadding number # Vertical padding between UI elements.
+---@param buttonHeight number # Height of the file action buttons.
+---@param x number? # Optional X position to place the window.
+---@param y number? # Optional Y position to place the window.
+---@param w number? # Optional width for the window.
+---@param h number? # Optional height for the window.
+local function openFileManWindow(scale, controlPadding, halfHeightPadding, buttonHeight, x, y, w, h)
+	if not file_man_open or not areNumber(scale, controlPadding, halfHeightPadding, buttonHeight) then return end
+
+	local files = dir("presets")
+	if not files then
+		file_man_open = false
+		logF(DevLevels.FULL, LogLevels.ERROR, 0xcb3d, Text.LOG_DIR_NOT_EXIST, "presets")
+		return
+	end
+
+	if areNumber(x, y, w, h) then
+		---@cast x number
+		---@cast y number
+		---@cast w number
+		---@cast h number
+		ImGui.SetNextWindowPos(x, y)
+		ImGui.SetNextWindowSize(w, h)
+	end
+
+	local flags = bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove)
+	file_man_open = ImGui.Begin(Text.GUI_FMAN_TITLE, file_man_open, flags)
+	if not file_man_open then return end
+
+	local barFlags = bor(ImGuiTableFlags.SizingFixedFit, ImGuiTableFlags.NoBordersInBody)
+	local barHeight = math.floor(32 * scale)
+	if ImGui.BeginTable("SearchBar", 3, barFlags) then
+		ImGui.TableSetupColumn("##Label", ImGuiTableColumnFlags.WidthFixed, barHeight)
+		ImGui.TableSetupColumn("##Input", ImGuiTableColumnFlags.WidthStretch)
+		ImGui.TableSetupColumn("##PadRight", ImGuiTableColumnFlags.WidthFixed, barHeight)
+
+		ImGui.TableNextRow()
+
+		ImGui.TableSetColumnIndex(0)
+		local label = "\u{f1a7e}"
+		alignNext(label)
+		ImGui.Text(label)
+
+		ImGui.TableSetColumnIndex(1)
+		ImGui.PushItemWidth(-1)
+		local newVal, changed = ImGui.InputText("##Search", file_man_search or "", 96)
+		if changed and newVal then
+			file_man_search = newVal
+		end
+		ImGui.PopItemWidth()
+
+		ImGui.EndTable()
+	end
+	ImGui.Dummy(0, halfHeightPadding)
+
+	local anyFiles = false
+	if ImGui.BeginTable("PresetFiles", 2, ImGuiTableFlags.Borders) then
+		ImGui.TableSetupColumn(" \u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
+		ImGui.TableSetupColumn(" \u{f05e9}", ImGuiTableColumnFlags.WidthFixed)
+		ImGui.TableHeadersRow()
+
+		for _, file in ipairs(files) do
+			local f = file.name
+			if not hasLuaExt(f) then goto continue end
+
+			anyFiles = true
+
+			local sp = (file_man_search or ""):lower()
+			if #sp > 0 and not f:lower():find(sp, 1, true) then
+				goto continue
+			end
+
+			local k = trimLuaExt(f)
+			local usage = preset_usage[k]
+			local c
+			if not contains(camera_presets, k) then
+				c = Colors.GARNET
+			elseif isTable(usage) then
+				c = Colors.FIR
+			end
+
+			ImGui.TableNextRow()
+			ImGui.TableSetColumnIndex(0)
+
+			alignNext(buttonHeight)
+
+			if c then c = pushColors(ImGuiCol.Text, c) end
+
+			local columnWidth = ImGui.GetColumnWidth(0) - 4
+			local textWidth = ImGui.CalcTextSize(f)
+			local nameTooLong = columnWidth < textWidth
+			if nameTooLong then
+				local short = f
+				local dots = "..."
+				local cutoff = columnWidth - ImGui.CalcTextSize(dots)
+				while #short > 0 and ImGui.CalcTextSize(short) > cutoff do
+					short = short:sub(1, -2)
+				end
+				ImGui.Text(short .. dots)
+				addTooltip(scale, format(Text.GUI_FMAN_NAME_TIP, f))
+			else
+				ImGui.Text(f)
+			end
+
+			if c then popColors(c) end
+
+			if usage then
+				if nameTooLong then
+					addTooltip(scale, "\n")
+				end
+				local fmt = "%Y-%m-%d %H:%M:%S %p"
+				addTooltip(nil,
+					split(format(Text.GUI_FMAN_USAGE_TIP,
+						os.date(fmt, usage.First),
+						os.date(fmt, usage.Last),
+						usage.Total), "|"))
+			end
+
+			ImGui.TableSetColumnIndex(1)
+			if ImGui.Button("\u{f05e8}##" .. f, 0, buttonHeight) then
+				ImGui.OpenPopup(f)
+			end
+
+			if addPopupYesNo(f, format(Text.GUI_FMAN_DEL_CONFIRM, f), scale, Colors.GARNET) then
+				local path = getPresetFilePath(f) ---@cast path string
+				local ok, err = os.remove(path)
+				if ok then
+					for n in pairs(editor_bundles) do
+						local parts = split(n, "*")
+						if #parts < 2 then goto continue end
+
+						local vName, aName = parts[1], parts[2]
+						if startsWith(vName, k) or startsWith(aName, k) then
+							editor_bundles[n] = nil
+						end
+
+						::continue::
+					end
+
+					setPresetEntry(k)
+
+					if get(editor_last_bundle, {}, "Flux").Key == k then
+						restoreModifiedPresets()
+						clearLastEditorBundle()
+					end
+
+					logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_DEL_SUCCESS, f)
+				else
+					logF(DevLevels.FULL, LogLevels.WARN, 0xcb3d, Text.LOG_DEL_FAILURE, f, err)
+				end
+			end
+
+			::continue::
+		end
+
+		ImGui.EndTable()
+	end
+
+	if not anyFiles then
+		local hPad = ceil(180 * scale)
+		local wPad = floor(controlPadding - 4 * scale)
+		ImGui.Dummy(0, hPad)
+		ImGui.Dummy(wPad, 0)
+		ImGui.SameLine()
+		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
+		ImGui.Text(Text.GUI_FMAN_NO_PSETS)
+		ImGui.PopStyleColor()
+	end
+
+	ImGui.End()
+end
+
 --#endregion
 
 --#region 🎬 Runtime Behavior
+
+---Initializes the mod when CET is loaded.
+---This function is triggered once at the beginning of a session.
+---It loads all preset files, usage data, and applies the current camera preset.
+local function onInit()
+	loadPresets(true)
+	loadPresetUsage()
+	applyPreset()
+end
+
+---Handles logic when a vehicle is mounted.
+---If forced or conditions are met, applies the appropriate camera preset.
+---@param force boolean? # If true, the preset will be applied regardless of state.
+local function onMount(force)
+	if not force and not mod_enabled or isTableNotEmpty(vehicle_cache) then return end
+
+	log_suspend = false
+	applyPreset()
+end
+
+---Handles logic when a vehicle is unmounted.
+---If forced or the mod is enabled, resets padding and cache, restores default presets,
+---and clears the last active editor session state.
+---@param force boolean? # If true, unmount logic will execute even if the mod is disabled.
+local function onUnmount(force)
+	if not force and not mod_enabled then return end
+
+	log_suspend = false
+	padding_width = 0
+	vehicle_cache = {}
+	restoreModifiedPresets()
+	clearLastEditorBundle()
+end
+
+---Handles logic when the game or CET shuts down.
+---Restores all camera presets and parameters to default and saves usage stats.
+local function onShutdown()
+	restoreAllPresets()
+	restoreAllCustomCameraParams()
+	savePresetUsage()
+end
 
 --This event is triggered when the CET environment initializes for a particular game session.
 registerForEvent("onInit", function()
@@ -2373,36 +2692,23 @@ registerForEvent("onInit", function()
 	end
 	]]
 
-	--Load all saved presets from disk.
-	loadPresets(true)
-
-	--This step is mainly necessary here in case all mods are reloaded while the player is already inside a vehicle.
-	applyPreset()
+	--Load all saved data from disk; apply preset only if the player is in a vehicle.
+	onInit()
 
 	--When the player mounts a vehicle, automatically apply the matching camera preset if available.
 	--This event can fire even if the player is already mounted.
-	Observe("VehicleComponent", "OnMountingEvent", function()
-		if not mod_enabled or isTableNotEmpty(vehicle_cache) then return end
-		log_suspend = false
-		applyPreset()
-	end)
+	Observe("VehicleComponent", "OnMountingEvent", onMount)
 
 	--When the player unmounts from a vehicle, reset to default camera offsets.
-	Observe("VehicleComponent", "OnUnmountingEvent", function()
-		if not mod_enabled then return end
-		log_suspend = false
-		vehicle_cache = {}
-		restoreModifiedPresets()
-		clearLastEditorBundle()
-	end)
+	Observe("VehicleComponent", "OnUnmountingEvent", onUnmount)
 
 	--Reset the current editor state when the player takes control of their character
 	--(usually after loading a save game). This ensures UI does not persist stale data.
 	Observe("PlayerPuppet", "OnTakeControl", function(self)
 		if not mod_enabled or self:GetEntityID().hash ~= 1 then return end
-		log_suspend = false
-		vehicle_cache = {}
-		applyPreset()
+		file_man_open = false
+		onUnmount()
+		onMount()
 	end)
 end)
 
@@ -2414,6 +2720,7 @@ end)
 --Detects when the CET overlay is closed.
 registerForEvent("onOverlayClose", function()
 	overlay_open = false
+	file_man_open = false
 end)
 
 --Display a simple GUI with some options.
@@ -2460,21 +2767,19 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
 	local isEnabled = ImGui.Checkbox(Text.GUI_TGL_MOD, mod_enabled)
-	addTooltip(Text.GUI_TGL_MOD_TIP)
+	addTooltip(scale, Text.GUI_TGL_MOD_TIP)
 	if isEnabled ~= mod_enabled then
 		mod_enabled = isEnabled
-		log_suspend = false
 		if isEnabled then
-			loadPresets()
-			applyPreset()
+			log_suspend = false
+			onInit()
 			logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_MOD_ON)
 		else
-			restoreModifiedPresets()
-			clearLastEditorBundle()
-			restoreAllPresets()
-			restoreAllCustomCameraParams()
+			onUnmount(true)
+			onShutdown()
 			purgePresets()
 			editor_bundles = {}
+			preset_usage = {}
 			vehicle_cache = {}
 			dev_mode = DevLevels.DISABLED
 			logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_MOD_OFF)
@@ -2500,7 +2805,7 @@ registerForEvent("onDraw", function()
 		applyPreset()
 		logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_PSETS_RLD)
 	end
-	addTooltip(Text.GUI_RLD_ALL_TIP)
+	addTooltip(scale, Text.GUI_RLD_ALL_TIP)
 	ImGui.Dummy(0, halfHeightPadding)
 
 	--Slider to set the developer mode level.
@@ -2513,7 +2818,7 @@ registerForEvent("onDraw", function()
 		dev_mode = min(max(devMode, DevLevels.DISABLED), DevLevels.FULL)
 	end
 	padding_locked = ImGui.IsItemActive()
-	addTooltip(Text.GUI_DMODE_TIP)
+	addTooltip(scale, Text.GUI_DMODE_TIP)
 	ImGui.PopItemWidth()
 	ImGui.Dummy(0, doubleHeightPadding)
 
@@ -2529,29 +2834,23 @@ registerForEvent("onDraw", function()
 		end,
 		function()
 			name = getVehicleName()
-
 			if not name then
 				log(LogLevels.ERROR, 0xcb3d, Text.LOG_NO_NAME)
 			end
-
 			return name
 		end,
 		function()
 			appName = getVehicleAppearanceName()
-
 			if not appName then
 				log(LogLevels.ERROR, 0xcb3d, Text.LOG_NO_APP)
 			end
-
 			return appName
 		end,
 		function()
 			id = getVehicleCameraID()
-
 			if not id then
 				log(LogLevels.ERROR, 0xcb3d, Text.LOG_NO_ID)
 			end
-
 			return id
 		end,
 		function()
@@ -2577,20 +2876,35 @@ registerForEvent("onDraw", function()
 	end
 	if failed then
 		log_suspend = true
-		if dev_mode > DevLevels.DISABLED and not vehicle then
-			ImGui.Dummy(controlPadding, 0)
-			ImGui.SameLine()
-			ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.CARAMEL, 0xff))
-			ImGui.Text(Text.GUI_NO_VEH)
-			ImGui.PopStyleColor()
+		if dev_mode > DevLevels.DISABLED then
+			if not vehicle then
+				ImGui.Dummy(controlPadding, 0)
+				ImGui.SameLine()
+				ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.CARAMEL, 0xff))
+				ImGui.Text(Text.GUI_NO_VEH)
+				ImGui.PopStyleColor()
+				ImGui.Dummy(0, halfHeightPadding)
+			end
+
+			--Button to open the Preset File Manager.
+			local x, y, w, h = addFileManButton(contentWidth, heightPadding, halfHeightPadding, buttonHeight)
+
+			--Main window is done.
+			ImGui.End()
+
+			--Opens the Preset File Manager window when toggled.
+			openFileManWindow(scale, controlPadding, halfHeightPadding, buttonHeight, x, y, w, h)
+			return
 		end
+
+		--Creation of Main window is complete.
 		ImGui.End()
 		return
 	end
 
 	local bundle = getEditorBundle(name, appName, id, key) ---@cast bundle IEditorBundle
 	if not isTableNotEmpty(bundle) then
-		--GUI closed — nothing else to display.
+		--Nothing else to display.
 		ImGui.End()
 	end
 	editor_last_bundle = bundle
@@ -2601,7 +2915,7 @@ registerForEvent("onDraw", function()
 	local nexus = bundle.Nexus ---@cast nexus IEditorPreset
 	local tasks = bundle.Tasks ---@cast tasks IEditorTasks
 	if not areTableNotEmpty(flux, pivot, finale, nexus, tasks) then
-		--GUI closed — no further controls required.
+		--No further controls required.
 		ImGui.End()
 	end
 
@@ -2641,7 +2955,7 @@ registerForEvent("onDraw", function()
 
 			alignNext(rowHeight)
 			ImGui.Text(row.label)
-			addTooltip(row.tip)
+			addTooltip(scale, row.tip)
 
 			ImGui.TableSetColumnIndex(1)
 
@@ -2657,7 +2971,7 @@ registerForEvent("onDraw", function()
 						insert(list, v .. ":")
 						insert(list, camMap[v])
 					end
-					addTooltip(list)
+					addTooltip(nil, list)
 				end
 			elseif row.editable then
 				local namWidth = ImGui.CalcTextSize(name)
@@ -2697,7 +3011,7 @@ registerForEvent("onDraw", function()
 				popColors(pushd)
 				ImGui.PopItemWidth()
 
-				addTooltip(format(
+				addTooltip(scale, format(
 					row.valTip,
 					color == Colors.CARAMEL and flux.Name or key,
 					name,
@@ -2708,7 +3022,7 @@ registerForEvent("onDraw", function()
 			else
 				alignNext(rowHeight)
 				ImGui.Text(tostring(row.value or Text.GUI_NONE))
-				addTooltip(row.valTip)
+				addTooltip(scale, row.valTip)
 			end
 
 			::continue::
@@ -2767,7 +3081,7 @@ registerForEvent("onDraw", function()
 
 			alignNext(rowHeight)
 			ImGui.Text(row.label)
-			addTooltip(row.tip)
+			addTooltip(scale, row.tip)
 
 			for j, field in ipairs(PresetOffsets) do
 				local defVal = get(nexus.Preset, 0, level, field)
@@ -2792,7 +3106,7 @@ registerForEvent("onDraw", function()
 				local tip = tips[j]
 				if tip then
 					local origVal = get(pivot.Preset, defVal, level, field)
-					addTooltip(split(format(tip, defVal, minVal, maxVal, origVal), "|"))
+					addTooltip(nil, split(format(tip, defVal, minVal, maxVal, origVal), "|"))
 				end
 
 				ImGui.PopItemWidth()
@@ -2825,7 +3139,7 @@ registerForEvent("onDraw", function()
 		applyEditorPreset(key, flux, pivot, tasks)
 	end
 	popColors(pushed)
-	addTooltip(Text.GUI_APPLY_TIP)
+	addTooltip(scale, Text.GUI_APPLY_TIP)
 	ImGui.SameLine()
 
 	--Button in same line to save configured values to a file for future automatic use.
@@ -2840,7 +3154,7 @@ registerForEvent("onDraw", function()
 		end
 	end
 	popColors(pushed)
-	addTooltip(format(tasks.Restore and Text.GUI_REST_TIP or Text.GUI_SAVE_TIP, key))
+	addTooltip(scale, format(tasks.Restore and Text.GUI_REST_TIP or Text.GUI_SAVE_TIP, key))
 
 	if overwrite_confirm then
 		local confirmed = addPopupYesNo(key, format(Text.GUI_OVWR_CONFIRM, key), scale, Colors.CARAMEL)
@@ -2864,164 +3178,17 @@ registerForEvent("onDraw", function()
 
 	ImGui.Dummy(0, heightPadding)
 
-	--Button to open Preset File Manager.
-	local x, y, w, h
-	ImGui.Separator()
-	ImGui.Dummy(0, heightPadding)
-	if ImGui.Button(Text.GUI_OPEN_FMAN, contentWidth, buttonHeight) then
-		x, y = ImGui.GetWindowPos()
-		w, h = ImGui.GetWindowSize()
-		file_man_open = not file_man_open
-	end
-	ImGui.Dummy(0, halfHeightPadding)
+	--Button to open the Preset File Manager.
+	local x, y, w, h = addFileManButton(contentWidth, heightPadding, halfHeightPadding, buttonHeight)
 
-	--GUI creation of Main window is complete.
+	--Well done.
 	ImGui.End()
 
-	--Preset File Manager window.
-	if not file_man_open then return end
-
-	local files = dir("presets")
-	if not files then
-		file_man_open = false
-		logF(DevLevels.FULL, LogLevels.ERROR, 0xcb3d, Text.LOG_DIR_NOT_EXIST, "presets")
-		return
-	end
-
-	if areNumber(x, y, w, h) then
-		ImGui.SetNextWindowPos(x, y)
-		ImGui.SetNextWindowSize(w, h)
-	end
-
-	local flags = bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove)
-	file_man_open = ImGui.Begin(Text.GUI_FMAN_TITLE, file_man_open, flags)
-	if not file_man_open then return end
-
-	local barFlags = bor(ImGuiTableFlags.SizingFixedFit, ImGuiTableFlags.NoBordersInBody)
-	local barHeight = math.floor(32 * scale)
-	if ImGui.BeginTable("SearchBar", 3, barFlags) then
-		ImGui.TableSetupColumn("##Label", ImGuiTableColumnFlags.WidthFixed, barHeight)
-		ImGui.TableSetupColumn("##Input", ImGuiTableColumnFlags.WidthStretch)
-		ImGui.TableSetupColumn("##PadRight", ImGuiTableColumnFlags.WidthFixed, barHeight)
-
-		ImGui.TableNextRow()
-
-		ImGui.TableSetColumnIndex(0)
-		local label = "\u{f1a7e}"
-		alignNext(label)
-		ImGui.Text(label)
-
-		ImGui.TableSetColumnIndex(1)
-		ImGui.PushItemWidth(-1)
-		local newVal, changed = ImGui.InputText("##Search", file_search or "", 96)
-		if changed and newVal then
-			file_search = newVal
-		end
-		ImGui.PopItemWidth()
-
-		ImGui.EndTable()
-	end
-	ImGui.Dummy(0, halfHeightPadding)
-
-	local anyFiles = false
-	if ImGui.BeginTable("PresetFiles", 2, ImGuiTableFlags.Borders) then
-		ImGui.TableSetupColumn(" \u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
-		ImGui.TableSetupColumn(" \u{f05e9}", ImGuiTableColumnFlags.WidthFixed)
-		ImGui.TableHeadersRow()
-
-		for _, file in ipairs(files) do
-			local f = file.name
-			if not hasLuaExt(f) then goto continue end
-
-			anyFiles = true
-
-			local sp = (file_search or ""):lower()
-			if #sp > 0 and not f:lower():find(sp, 1, true) then
-				goto continue
-			end
-
-			local k = trimLuaExt(f)
-			local c
-			if not contains(camera_presets, k) then
-				c = Colors.GARNET
-			end
-
-			ImGui.TableNextRow()
-			ImGui.TableSetColumnIndex(0)
-
-			alignNext(buttonHeight)
-
-			if c then c = pushColors(ImGuiCol.Text, c) end
-
-			local columnWidth = ImGui.GetColumnWidth(0) - 4
-			local textWidth = ImGui.CalcTextSize(f)
-			if columnWidth < textWidth then
-				local short = f
-				local dots = "..."
-				local cutoff = columnWidth - ImGui.CalcTextSize(dots)
-				while #short > 0 and ImGui.CalcTextSize(short) > cutoff do
-					short = short:sub(1, -2)
-				end
-				ImGui.Text(short .. dots)
-				addTooltip(f)
-			else
-				ImGui.Text(f)
-			end
-
-			if c then popColors(c) end
-
-			ImGui.TableSetColumnIndex(1)
-			if ImGui.Button("\u{f05e8}##" .. f, 0, buttonHeight) then
-				ImGui.OpenPopup(f)
-			end
-
-			if addPopupYesNo(f, format(Text.GUI_FMAN_DEL_CONFIRM, f), scale, Colors.GARNET) then
-				local path = getPresetFilePath(f) ---@cast path string
-				local ok, err = os.remove(path)
-				if ok then
-					for n in pairs(editor_bundles) do
-						local parts = split(n, "*")
-						if #parts < 2 then goto continue end
-
-						local vName, aName = parts[1], parts[2]
-						if startsWith(vName, k) or startsWith(aName, k) then
-							editor_bundles[n] = nil
-						end
-
-						::continue::
-					end
-					setPresetEntry(k)
-					logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_DEL_SUCCESS, f)
-				else
-					logF(DevLevels.FULL, LogLevels.WARN, 0xcb3d, Text.LOG_DEL_FAILURE, f, err)
-				end
-			end
-
-			::continue::
-		end
-
-		ImGui.EndTable()
-	end
-
-	if not anyFiles then
-		local hPad = ceil(180 * scale)
-		local wPad = floor(controlPadding - 4 * scale)
-		ImGui.Dummy(0, hPad)
-		ImGui.Dummy(wPad, 0)
-		ImGui.SameLine()
-		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
-		ImGui.Text(Text.GUI_FMAN_NO_PSETS)
-		ImGui.PopStyleColor()
-	end
-
-	--GUI creation of Preset File Manager window is complete.
-	ImGui.End()
+	--Opens the Preset File Manager window when toggled.
+	openFileManWindow(scale, controlPadding, halfHeightPadding, buttonHeight, x, y, w, h)
 end)
 
 --Restores default camera offsets for vehicles upon mod shutdown.
-registerForEvent("onShutdown", function()
-	restoreAllPresets()
-	restoreAllCustomCameraParams()
-end)
+registerForEvent("onShutdown", onShutdown)
 
 --#endregion
