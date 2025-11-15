@@ -1,1 +1,1 @@
-return{ID="4w_Thorton_Colby_Pickup",Close={y=-0.2,z=1.75},Medium={y=-0.3,z=2.4},Far={y=-0.4,z=2.75}}
+return{ID="4w_Thorton_Colby_Pickup_Kurtz",Close={y=-0.15,z=1.75,d=0.1},Medium={y=-0.15,z=2.4,d=1.7},Far={y=-0.15,d=4.1}}

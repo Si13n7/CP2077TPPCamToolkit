@@ -1,1 +1,1 @@
-return{ID="v_militech_basilisk_CameraPreset",Close={a=5,x=0,y=2,z=5.75},Medium={a=5,x=0,y=2,z=5.75},Far={a=5,x=0,y=2,z=5.75},IsDefault=true}
+return{ID="v_militech_basilisk_CameraPreset",Close={a=5,x=0,y=2,z=5.75,d=0},Medium={a=5,x=0,y=2,z=5.75,d=1.5},Far={a=5,x=0,y=2,z=5.75,d=4},IsDefault=true}

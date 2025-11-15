@@ -1,1 +1,1 @@
-return{ID="4w_herrera_riptide",Close={y=0.8},Medium={y=1.05}}
+return{ID="4w_herrera_riptide",Close={y=0.35,d=-0.5},Medium={y=0.35,d=0.5},Far={y=0.35,d=3.8}}

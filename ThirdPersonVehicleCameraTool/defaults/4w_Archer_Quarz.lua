@@ -1,1 +1,1 @@
-return{ID="4w_Archer_Quarz",Close={a=11,x=0,y=0.5,z=1.25},Medium={a=11,x=0,y=0.5,z=1.65},Far={a=11,x=0,y=0.5,z=2.35},IsDefault=true}
+return{ID="4w_Archer_Quarz",Close={a=11,x=0,y=0.5,z=1.25,d=0},Medium={a=11,x=0,y=0.5,z=1.65,d=1.5},Far={a=11,x=0,y=0.5,z=2.35,d=4},IsDefault=true}

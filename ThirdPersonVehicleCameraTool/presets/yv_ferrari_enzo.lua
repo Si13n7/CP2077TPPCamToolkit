@@ -1,1 +1,1 @@
-return{ID="4w_caliburn",Close={y=0.35,z=1.2},Medium={y=0.45,z=1.65},Far={y=0.6}}
+return{ID="4w_caliburn",Close={y=0.3,z=1.2},Medium={y=0.3,z=1.65,d=1.3},Far={y=0.3,d=3.8}}

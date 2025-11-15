@@ -1,1 +1,1 @@
-return{ID="v_utility4_kaukaz_zeya_Preset",Close={a=11,x=0,y=1.5,z=2.65},Medium={a=11,x=0,y=1.5,z=3},Far={a=11,x=0,y=1.5,z=3.5},IsDefault=true}
+return{ID="v_utility4_kaukaz_zeya_Preset",Close={a=11,x=0,y=1.5,z=2.65,d=0},Medium={a=11,x=0,y=1.5,z=3,d=1.5},Far={a=11,x=0,y=1.5,z=3.5,d=4},IsDefault=true}

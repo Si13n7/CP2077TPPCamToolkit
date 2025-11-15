@@ -1,1 +1,1 @@
-return{ID="4w_Cortes_Preset",Close={y=0.9},Medium={y=0.95,z=1.65},Far={y=0.6,z=2.25}}
+return{ID="4w_Cortes_Preset",Close={y=0.1,d=-0.8},Medium={y=0.1,z=1.65,d=0.6},Far={y=0.1,z=2.25,d=3.4}}

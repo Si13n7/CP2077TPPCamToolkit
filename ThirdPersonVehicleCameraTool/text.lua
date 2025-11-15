@@ -8,7 +8,7 @@ Third-Person Vehicle Camera Tool
 Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
-Version: 2025-08-26, 22:43 UTC+01:00 (MEZ)
+Version: 2025-08-29, 18:36 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -43,7 +43,7 @@ return {
 	GUI_OVWR_CONFIRM = "Replace existing file \"presets/%s.lua\"?",
 	GUI_OPEN_GOPT = "\u{F1064} Global Parameters ",
 	GUI_GOPT_FOV = "Field Of View",
-	GUI_GOPT_LC = "No Auto-Centering",
+	GUI_GOPT_NAC = "No Auto-Centering",
 	GUI_OPEN_FMAN = "\u{f12e3} Preset File Manager ",
 
 	--GUI: 📋 Table Label Tooltips
@@ -60,9 +60,10 @@ return {
 	GUI_TBL_VAL_CCAMID_TIP = "\u{f1980} Camera Access Map| |Distance Level:|Database Access Path:",
 	GUI_TBL_VAL_PSET_TIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of Vehicle or Appearance, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} Vehicle: (e.g. \"%s\")\n\u{f0b3b}\u{f07ac} Appearance: (e.g. \"%s\")\n\u{f0b3c}\u{f010b} Prefix of Vehicle: (e.g. \"%s\")\n\u{f0b3d}\u{f07ac} Prefix of Appearance: (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority, otherwise, you will need to delete the one that will steal its priority. Take a look at the Preset File Manager to delete presets.",
 	GUI_TBL_VAL_ANG_TIP = "\u{f10f3} Angles (°)| |Default:|%d|Min:|%d|Max:|%d|In Use:|%d",
-	GUI_TBL_VAL_X_TIP = "\u{f0d4c} X-Offset| |Default:|%.3f|Min:|%.3f|Max:|%.3f|In Use:|%.3f|Decrease:|Left|Increase:|Right",
-	GUI_TBL_VAL_Y_TIP = "\u{f0d51} Y-Offset| |Default:|%.3f|Min:|%.3f|Max:|%.3f|In Use:|%.3f|Decrease:|Farther|Increase:|Closer",
-	GUI_TBL_VAL_Z_TIP = "\u{f0d55} Z-Offset| |Default:|%.3f|Min:|%.3f|Max:|%.3f|In Use:|%.3f|Decrease:|Down|Increase:|Up",
+	GUI_TBL_VAL_DIST_TIP = "\u{f054e} Distance| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Closer|Increase:|Farther",
+	GUI_TBL_VAL_X_TIP = "\u{f0d4c} X-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Left|Increase:|Right",
+	GUI_TBL_VAL_Y_TIP = "\u{f0d51} Y-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Farther|Increase:|Closer",
+	GUI_TBL_VAL_Z_TIP = "\u{f0d55} Z-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Down|Increase:|Up",
 
 	--GUI: 🗂️ Preset File Manager
 	GUI_FMAN_TITLE = "Preset File Manager",

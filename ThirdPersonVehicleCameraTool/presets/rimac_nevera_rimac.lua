@@ -1,1 +1,0 @@
-return{ID="4w_Shion",Close={y=0.3},Medium={y=0.1},Far={y=-0.15}}

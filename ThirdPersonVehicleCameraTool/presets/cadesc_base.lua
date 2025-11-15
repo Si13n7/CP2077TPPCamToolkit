@@ -1,1 +1,1 @@
-return{ID="4w_aerondight",Close={y=-0.5,z=1.75},Medium={y=-0.4,z=2.35},Far={y=-0.8,z=2.85}}
+return{ID="4w_aerondight",Close={y=-0.1,z=1.55,d=0.3},Medium={y=-0.1,z=2.15,d=2},Far={y=-0.1,z=2.85,d=5.5}}

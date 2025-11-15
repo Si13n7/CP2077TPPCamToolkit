@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-08-27, 17:38 UTC+01:00 (MEZ)
+Version: 2025-08-29, 18:37 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -67,6 +67,7 @@ ______________________________________________
 ---@field x number # The offset on the X-axis.
 ---@field y number # The offset on the Y-axis.
 ---@field z number # The offset on the Z-axis.
+---@field d number # The offset of the camera distance.
 
 ---Represents a vehicle camera preset.
 ---@class ICameraPreset
@@ -188,7 +189,8 @@ local PresetOffsets = {
 	"a",
 	"x",
 	"y",
-	"z"
+	"z",
+	"d"
 }
 
 ---Patch 2.3 workaround for incomplete TweakDB vehicle records in CET.
@@ -300,7 +302,7 @@ local global_param_keys = {
 	"Camera.VehicleTPP_2w_DefaultParams"
 }
 
----Global default parameter data.
+---Global default parameter values.
 ---@type table<string, IDefaultParamData>
 local global_params = {
 	fov = {
@@ -310,7 +312,7 @@ local global_params = {
 		Max = 150
 	},
 	lockedCamera = {
-		DisplayName = Text.GUI_GOPT_LC,
+		DisplayName = Text.GUI_GOPT_NAC,
 		Default = false
 	}
 }
@@ -907,7 +909,7 @@ local function serialize(x)
 		if isString(x) then
 			return format("%q", x)
 		elseif isNumeric(x) then
-			local str = format("%.3f", x):gsub("0+$", ""):gsub("%.$", "")
+			local str = format("%.2f", x):gsub("0+$", ""):gsub("%.$", "")
 			return str
 		elseif isVector3(x) then
 			local t = {}
@@ -1505,7 +1507,7 @@ local function getCameraTweakKey(preset, path, var)
 	return format("%s.VehicleTPP_%s_%s.%s", section, id, path, var), false
 end
 
----Fetches the default rotation pitch value for a vehicle camera.
+---Gets the default rotation pitch value for a given camera preset and path.
 ---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera path for the vehicle.
 ---@return number # The default rotation pitch for the given camera path.
@@ -1538,7 +1540,7 @@ local function getCameraDefaultRotationPitch(preset, path)
 	return value or defVal
 end
 
----Sets the default rotation pitch value for a vehicle camera.
+---Sets the default rotation pitch for a given camera preset and path.
 ---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera path for the vehicle.
 ---@param value number # The value to set for the default rotation pitch.
@@ -1577,18 +1579,16 @@ local function setCameraDefaultRotationPitch(preset, path, value)
 	TweakDB:SetFlat(key, value)
 end
 
----Fetches the current camera offset from TweakDB based on the specified ID and path.
+---Gets the look-at offset value for a given camera preset and path.
 ---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera path to retrieve the offset for.
 ---@return Vector3? # The camera offset as a Vector3.
 local function getCameraLookAtOffset(preset, path)
 	local key = getCameraTweakKey(preset, path, "lookAtOffset")
-	if not key then return nil end
-
-	return TweakDB:GetFlat(key)
+	return key and TweakDB:GetFlat(key) or nil
 end
 
----Sets a camera offset in TweakDB to the specified position values.
+---Sets the look-at offset for a given camera preset and path.
 ---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera path to set the offset for.
 ---@param x number # The X-coordinate of the camera position.
@@ -1618,6 +1618,44 @@ local function setCameraLookAtOffset(preset, path, x, y, z)
 	--Finally, set the new value.
 	if dev_mode >= DevLevels.FULL then
 		log(LogLevels.INFO, 0xb786, Text.LOG_PARAM_SET, key, serialize(value))
+	end
+	TweakDB:SetFlat(key, value)
+end
+
+---Gets the boom length offset value for a given camera preset and path.
+---@param preset ICameraPreset # The camera preset.
+---@param path string # The camera path for the vehicle.
+---@return number # The boom length offset for the given camera path.
+local function getCameraBoomLengthOffset(preset, path)
+	local key = getCameraTweakKey(preset, path, "boomLengthOffset")
+	return key and (tonumber(TweakDB:GetFlat(key)) or 0) or 0
+end
+
+---Sets the boom length offset for a given camera preset and path.
+---@param preset ICameraPreset # The camera preset.
+---@param path string # The camera path for the vehicle.
+---@param value number # The value to set for the boom length offset.
+local function setCameraBoomLengthOffset(preset, path, value)
+	if not isNumber(value) then return end
+
+	local key, isCustom = getCameraTweakKey(preset, path, "boomLengthOffset")
+	if not key then return end
+
+	local fallback = getCameraBoomLengthOffset(preset, path)
+	if not fallback or equals(value, fallback) then return end
+
+	--Backup default value for shutdown.
+	if isCustom and not custom_params[key] then
+		custom_params[key] = fallback
+
+		if dev_mode >= DevLevels.ALERT then
+			log(LogLevels.INFO, 0x25a4, Text.LOG_PARAM_BAK, key, serialize(fallback))
+		end
+	end
+
+	--Finally, set the new value.
+	if dev_mode >= DevLevels.FULL then
+		log(LogLevels.INFO, 0x25a4, Text.LOG_PARAM_SET, key, serialize(value))
 	end
 	TweakDB:SetFlat(key, value)
 end
@@ -1783,12 +1821,14 @@ local function getPreset(id)
 
 		local level = PresetLevels[(i - 1) % 3 + 1]
 		local angle = getCameraDefaultRotationPitch(preset, path)
+		local dist = getCameraBoomLengthOffset(preset, path)
 
 		preset[level] = {
 			a = tonumber(angle),
 			x = tonumber(vec3.x),
 			y = tonumber(vec3.y),
-			z = tonumber(vec3.z)
+			z = tonumber(vec3.z),
+			d = tonumber(dist),
 		}
 
 		if preset.Far and preset.Medium and preset.Close then
@@ -1848,10 +1888,11 @@ end
 ---@return number x # The X offset value. Falls back to 0 if not found.
 ---@return number y # The Y offset value. Falls back to 0 if not found.
 ---@return number z # The Z offset value. Falls back to a default per level (Close = 1.115, Medium = 1.65, Far = 2.25).
+---@return number d # The distance value. Falls back to a default per level (Close = 0, Medium = 1.5, Far = 4).
 local function getOffsetData(preset, fallback, level)
 	if not isTable(preset) or not contains(PresetLevels, level) then
 		logF(DevLevels.FULL, LogLevels.ERROR, 0x21d6, Text.LOG_NO_PSET_FOR_LVL, level)
-		return 0, 0, 0, 0 --Should never be returned with the current code.
+		return 0, 0, 0, 0, 0 --Should never be returned with the current code.
 	end
 
 	---@cast preset ICameraPreset
@@ -1862,8 +1903,9 @@ local function getOffsetData(preset, fallback, level)
 	local x = tonumber(p and p.x or f.x) or 0
 	local y = tonumber(p and p.y or f.y) or 0
 	local z = tonumber(p and p.z or f.z) or ({ Close = 1.115, Medium = 1.65, Far = 2.25 })[level]
+	local d = tonumber(p and p.d or f.d) or ({ Close = 0, Medium = 1.5, Far = 4 })[level]
 
-	return a, x, y, z
+	return a, x, y, z, d
 end
 
 ---Applies a camera offset preset to the vehicle by updating values in TweakDB.
@@ -1922,10 +1964,11 @@ local function applyPreset(preset, id)
 	local fallback = isDefault and preset or getDefaultPreset(preset) or {}
 	for i, path in ipairs(CameraLevels) do
 		local level = PresetLevels[(i - 1) % 3 + 1]
-		local a, x, y, z = getOffsetData(preset, fallback, level)
+		local a, x, y, z, d = getOffsetData(preset, fallback, level)
 
-		setCameraLookAtOffset(preset, path, x, y, z)
 		setCameraDefaultRotationPitch(preset, path, a)
+		setCameraLookAtOffset(preset, path, x, y, z)
+		setCameraBoomLengthOffset(preset, path, d)
 	end
 	if not isDefault then
 		preset_active = true
@@ -3163,6 +3206,57 @@ end
 
 --This event is triggered when the CET environment initializes for a particular game session.
 registerForEvent("onInit", function()
+	--Save default presets.
+	--[[
+	local defaults = {
+		"2w_Preset",
+		"4w_911",
+		"4w_aerondight",
+		"4w_Alvarado_Preset",
+		"4w_Archer_Hella",
+		"4w_Archer_Quarz",
+		"4w_BMF",
+		"4w_caliburn",
+		"4w_Columbus",
+		"4w_Cortes_Preset",
+		"4w_Galena",
+		"4w_Galena_Nomad",
+		"4w_herrera_outlaw",
+		"4w_herrera_riptide",
+		"4w_Hozuki",
+		"4w_Limo_Thrax",
+		"4w_Mahir_Supron_Kurtz",
+		"4w_Makigai",
+		"4w_Medium_Preset",
+		"4w_Preset",
+		"4w_Quadra",
+		"4w_Quadra66",
+		"4w_Quadra66_Nomad",
+		"4w_Shion",
+		"4w_Shion_Nomad",
+		"4w_SubCompact_Preset",
+		"4w_Tanishi",
+		"4w_Thorton_Colby",
+		"4w_Thorton_Colby_Pickup",
+		"4w_Thorton_Colby_Pickup_Kurtz",
+		"4w_Truck_Preset",
+		"Brennan_Preset",
+		"Default_Preset",
+		"v_militech_basilisk_CameraPreset",
+		"v_standard25_mahir_supron_CameraPreset",
+		"v_utility4_centurion",
+		"v_utility4_kaukaz_bratsk_Preset",
+		"v_utility4_kaukaz_zeya_Preset",
+		"v_utility4_militech_behemoth_Preset"
+	}
+	for _, value in ipairs(defaults) do
+		local preset = getPreset(value)
+		if preset then
+			savePreset(preset.ID, preset, true, true)
+		end
+	end
+	--]]
+
 	local backupDevMode
 
 	--CET version check.
@@ -3616,21 +3710,23 @@ registerForEvent("onDraw", function()
 		flux.Key = flux.Name
 	end
 
-	--Camera preset editor allowing adjustments to Angle, X, Y, and Z coordinates — if certain conditions are met.
-	if ImGui.BeginTable("PresetEditor", 5, ImGuiTableFlags.Borders) then
+	--Camera preset editor allowing adjustments to Angle, X, Y, Z
+	--coordinates, and Distance — if certain conditions are met.
+	if ImGui.BeginTable("PresetEditor", 6, ImGuiTableFlags.Borders) then
 		local headers = {
 			"\u{f066a}", --Levels
 			"\u{f10f3}\u{f0aee}", --Angles
 			"\u{f0d4c}\u{f0b05}", --X-axis
 			"\u{f0d51}\u{f0b06}", --Y-axis
-			"\u{f0d55}\u{f0b07}" --Z-axis
+			"\u{f0d55}\u{f0b07}", --Z-axis
+			"\u{f054e}\u{f0af1}" --Distance
 		}
 
 		for i, header in ipairs(headers) do
 			local flag = i < 3 and ImGuiTableColumnFlags.WidthFixed or ImGuiTableColumnFlags.WidthStretch
 			local head = header
-			if i > 2 and #head < 16 then
-				local pad = 16 - #head
+			if i > 2 and #head < 12 then
+				local pad = 12 - #head
 				local left = floor(pad / 2)
 				local right = pad - left
 				head = rep(" ", left) .. head .. rep(" ", right)
@@ -3650,7 +3746,8 @@ registerForEvent("onDraw", function()
 			Text.GUI_TBL_VAL_ANG_TIP,
 			Text.GUI_TBL_VAL_X_TIP,
 			Text.GUI_TBL_VAL_Y_TIP,
-			Text.GUI_TBL_VAL_Z_TIP
+			Text.GUI_TBL_VAL_Z_TIP,
+			Text.GUI_TBL_VAL_DIST_TIP
 		}
 
 		for i, row in ipairs(rows) do
@@ -3666,10 +3763,10 @@ registerForEvent("onDraw", function()
 			for j, field in ipairs(PresetOffsets) do
 				local defVal = get(nexus.Preset, 0, level, field)
 				local curVal = get(flux.Preset, defVal, level, field)
-				local speed = pick(j, 1, 5e-2)
-				local minVal = pick(j, -45, -5, -10, 0)
-				local maxVal = pick(j, 90, 5, 10, 32)
-				local fmt = pick(j, "%.0f", "%.3f")
+				local speed = pick(j, 1, 1e-2)
+				local minVal = pick(j, -45, -5, -10, 0, -3.8)
+				local maxVal = pick(j, 90, 5, 10, 32, 24)
+				local fmt = pick(j, "%.0f", "%.2f")
 
 				ImGui.TableSetColumnIndex(j)
 				ImGui.PushItemWidth(-1)
