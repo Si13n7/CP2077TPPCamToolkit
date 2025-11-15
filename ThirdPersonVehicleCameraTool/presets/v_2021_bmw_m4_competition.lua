@@ -1,0 +1,1 @@
+return{ID="4w_Cortes_Preset",Close={y=0.65},Medium={y=0.9},Far={y=0}}

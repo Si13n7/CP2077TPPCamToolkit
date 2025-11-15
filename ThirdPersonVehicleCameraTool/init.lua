@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-22, 10:38 UTC+01:00 (MEZ)
+Version: 2025-04-22, 18:27 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -197,6 +197,7 @@ local padding_locked
 ---@type table<string, IEditorBundle|nil>
 local editor_bundles = {}
 
+---Counts user right-clicks to unlock a hidden feature in the editor once the value reaches 10.
 ---@type number
 local editor_secret = 0
 
@@ -568,7 +569,7 @@ local function serialize(x)
 	if not isTable(x) then
 		if isString(x) then
 			return format("%q", x)
-		elseif isNumber(x) then
+		elseif hasNumber(x) then
 			local str = format("%.3f", x):gsub("0+$", ""):gsub("%.$", "")
 			return str
 		else
@@ -1582,6 +1583,58 @@ local function replaceEditorPreset(src, dest, verify)
 	dest.IsPresent = verify and presetFileExists(src.Key) or false
 end
 
+---Applies the current UI-edited camera preset to the internal preset registry.
+---Updates the pivot state, clears the old entry, and assigns any preserved overrides.
+---@param key string # The key under which the current preset will be stored.
+---@param flux IEditorPreset # The edited preset containing user modifications.
+---@param pivot IEditorPreset # The previously applied preset; will be overwritten with `flux`.
+---@param tasks IEditorTasks # Tracks pending editor actions; `Apply` will be cleared here.
+local function applyEditorPreset(key, flux, pivot, tasks)
+	if not isString(key) or not isTable(flux, pivot, tasks) then return end
+
+	tasks.Apply = false
+
+	local overrides = get(camera_presets, nil, pivot.Key, "Overrides")
+	camera_presets[pivot.Key] = nil
+	if not tasks.Restore then
+		camera_presets[key] = flux.Preset
+		camera_presets[key].Overrides = overrides
+	end
+
+	replaceEditorPreset(flux, pivot)
+
+	logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSET_UPD, key)
+end
+
+---Saves the current camera preset to disk and updates the saved (finale) state.
+---Performs overwrite, cleanup of old files on rename, and syncs the checksum.
+---@param key string # The key used as filename for saving the preset (without `.lua` extension).
+---@param flux IEditorPreset # The currently edited preset with unsaved modifications.
+---@param finale IEditorPreset # The last saved version of the preset; will be updated to match `flux`.
+---@param tasks IEditorTasks # Tracks pending editor actions; will reset `Save`, `Restore`, and optionally `Rename`.
+local function saveEditorPreset(key, flux, finale, tasks)
+	if not isString(key) or not isTable(flux, finale, tasks) then return end
+
+	if not savePreset(key, flux.Preset, true) then
+		logF(DevLevels.ALERT, LogLevels.WARN, Text.LOG_PSET_NOT_SAVED, key)
+		return
+	end
+
+	tasks.Restore = false
+	tasks.Save = false
+
+	if tasks.Rename then
+		tasks.Rename = false
+		local path = getPresetFilePath(finale.Name) ---@cast path string
+		local ok, err = os.remove(path)
+		if not ok then
+			logF(DevLevels.FULL, LogLevels.ERROR, Text.LOG_MOVE_FAILURE, finale.Name, flux.Name, err)
+		end
+	end
+
+	replaceEditorPreset(flux, finale, true)
+end
+
 --This event is triggered when the CET environment initializes for a particular game session.
 registerForEvent("onInit", function()
 	--Save default presets.
@@ -1766,7 +1819,7 @@ registerForEvent("onDraw", function()
 			editor_secret = 0
 			if not isString(overrides.Key) or not isTable(overrides.Levels) then
 				original.Overrides = {
-					Key = name,
+					Key = format("Camera.VehicleTPP_%s", id),
 					Levels = clone(CameraLevels)
 				}
 				overrides = original.Overrides
@@ -1948,7 +2001,7 @@ registerForEvent("onDraw", function()
 			for j, field in ipairs(PresetOffsets) do
 				local defVal = get(nexus.Preset, 0, level, field)
 				local curVal = get(flux.Preset, defVal, level, field)
-				local speed = pick(j, 1, 5e-3)
+				local speed = pick(j, 1, 5e-2)
 				local minVal = pick(j, -45, -5, -10, 0)
 				local maxVal = pick(j, 90, 5, 10, 32)
 				local fmt = pick(j, "%.0f", "%.3f")
@@ -1998,18 +2051,7 @@ registerForEvent("onDraw", function()
 	local pushed = tasks.Apply and pushColors(ImGuiCol.Button, color) or 0
 	if ImGui.Button(Text.GUI_APPLY, halfContentWidth, buttonHeight) then
 		--Always applies on user action — even if unnecessary.
-		tasks.Apply = false
-
-		local overrides = get(camera_presets, nil, pivot.Key, "Overrides")
-		camera_presets[pivot.Key] = nil
-		if not tasks.Restore then
-			camera_presets[key] = flux.Preset
-			camera_presets[key].Overrides = overrides
-		end
-
-		replaceEditorPreset(flux, pivot)
-
-		logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSET_UPD, key)
+		applyEditorPreset(key, flux, pivot, tasks)
 	end
 	popColors(pushed)
 	addTooltip(Text.GUI_APPLY_TIP)
@@ -2040,40 +2082,13 @@ registerForEvent("onDraw", function()
 		saveConfirmed = false
 
 		--Apply is always performed on user request, even if redundant.
-		tasks.Apply = false
-
-		local overrides = get(camera_presets, nil, pivot.Key, "Overrides")
-		camera_presets[pivot.Key] = nil
-		if not tasks.Restore then
-			camera_presets[key] = flux.Preset
-			camera_presets[key].Overrides = overrides
-		end
-
-		replaceEditorPreset(flux, pivot)
-
-		log(LogLevels.INFO, Text.LOG_PSET_UPD, key)
+		applyEditorPreset(key, flux, pivot, tasks)
 
 		--Saving is always performed, even if no changes were made in the editor. The
 		--user could theoretically delete preset files manually outside the game, and
 		--the mod wouldn't detect that at runtime. It would be problematic if saving
 		--were blocked just because the mod assumes there are no changes.
-		if savePreset(key, flux.Preset, true) then
-			tasks.Restore = false
-			tasks.Save = false
-
-			if tasks.Rename then
-				tasks.Rename = false
-				local path = getPresetFilePath(finale.Name) ---@cast path string
-				local ok, err = os.remove(path)
-				if not ok then
-					logF(DevLevels.FULL, LogLevels.ERROR, Text.LOG_MOVE_FAILURE, finale.Name, flux.Name, err)
-				end
-			end
-
-			replaceEditorPreset(flux, finale, true)
-		else
-			logF(DevLevels.ALERT, LogLevels.WARN, Text.LOG_PSET_NOT_SAVED, key)
-		end
+		saveEditorPreset(key, flux, finale, tasks)
 	end
 
 	ImGui.Dummy(0, heightPadding)
