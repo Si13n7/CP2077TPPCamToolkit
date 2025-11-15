@@ -1,1 +1,1 @@
-return{ID="4w_Quadra",Medium={y=0.05,d=1.3},Far={y=0.1,d=4.1}}
+return{ID="4w_Quadra",Medium={y=0.05,d=1.2},Far={y=0.1,d=4.5}}

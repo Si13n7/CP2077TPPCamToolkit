@@ -1,0 +1,1 @@
+return{ID="4w_herrera_outlaw",Close={y=0.08,d=0.2},Medium={y=0.08,d=1.02},Far={y=0.08,d=3.6},IsVanilla=true}

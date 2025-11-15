@@ -1,1 +1,1 @@
-return{ID="4w_Truck_Preset",Close={y=-0.2,d=-0.3},Medium={y=-0.2,d=1.2},Far={y=-0.2,d=4.2},IsVanilla=true}
+return{ID="4w_Truck_Preset",Close={y=-0.2,d=-0.3},Medium={y=-0.2,d=1},Far={y=-0.2,d=4.3},IsVanilla=true}

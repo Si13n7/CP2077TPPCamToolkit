@@ -1,1 +1,1 @@
-return{ID="bonk_ford_hennessey",Close={a=11,x=0,y=0.02,z=1.75,d=1.1},Medium={a=11,x=0,y=0.02,z=2.35,d=2.8},Far={a=11,x=0,y=0.02,z=2.85,d=5.6}}
+return{ID="bonk_ford_hennessey",Close={a=11,x=0,y=0.02,z=1.75,d=1.1},Medium={a=11,x=0,y=0.02,z=2.35,d=2.4},Far={a=11,x=0,y=0.02,z=2.85,d=6}}

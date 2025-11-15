@@ -1,1 +1,1 @@
-return{ID="4w_Alvarado_Preset",Close={y=-0.2,d=-0.5},Medium={y=-0.2,d=1},Far={y=-0.2,d=4.2},IsVanilla=true}
+return{ID="4w_Alvarado_Preset",Close={y=-0.2,d=-0.5},Medium={y=-0.2,d=0.95},Far={y=-0.2,d=4.4},IsVanilla=true}

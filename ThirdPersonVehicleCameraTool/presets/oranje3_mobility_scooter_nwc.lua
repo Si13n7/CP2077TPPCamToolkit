@@ -1,1 +1,1 @@
-return{ID="4w_Makigai",Close={d=-0.7},Medium={d=0.2},Far={d=2.2}}
+return{ID="4w_Makigai",Close={d=-0.7},Medium={d=0.05},Far={d=2.5}}

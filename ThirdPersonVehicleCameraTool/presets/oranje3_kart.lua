@@ -1,1 +1,1 @@
-return{ID="4w_Makigai",Close={y=0.06,z=1.2,d=-0.1},Medium={y=0.02,z=1.4,d=0.7},Far={y=0.06,z=1.6,d=2.3}}
+return{ID="4w_Makigai",Close={y=0.06,z=1.2,d=-0.1},Medium={z=1.4,d=0.6},Far={y=0.06,z=1.6,d=2.4}}

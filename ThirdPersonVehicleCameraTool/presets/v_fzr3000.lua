@@ -1,0 +1,1 @@
+return{ID="Brennan_Preset",Close={y=-0.18,d=0.8},Medium={y=-0.18,d=1.8},Far={y=-0.18,d=4.4}}

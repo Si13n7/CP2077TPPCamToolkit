@@ -1,0 +1,1 @@
+return{ID="4w_Quadra66",Close={y=0.1,d=-0.05},Medium={y=0.1,d=1.4},Far={y=0.1,d=5},IsVanilla=true}

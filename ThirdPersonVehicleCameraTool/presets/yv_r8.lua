@@ -1,1 +1,1 @@
-return{ID="4w_Archer_Hella",Close={y=0.2,z=1.15,d=-1.2},Medium={y=0.2,z=1.65,d=0.2},Far={y=0.2,z=2.35,d=3.2}}
+return{ID="4w_Archer_Hella",Close={y=0.2,z=1.15,d=-1},Medium={y=0.2,z=1.65,d=-0.6},Far={y=0.2,z=2.35,d=2.5}}

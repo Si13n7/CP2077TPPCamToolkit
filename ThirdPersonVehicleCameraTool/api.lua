@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-10-11, 13:39 UTC+01:00 (MEZ)
+Version: 2025-10-14, 00:11 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -254,6 +254,11 @@ Vector3 = Vector3
 ---@field encode fun(value: any): string # Converts a Lua table or value to a JSON-formatted string. Returns a string representation of the data.
 ---@field decode fun(jsonString: string): table # Converts a JSON-formatted string to a Lua table. Returns the parsed table if successful, or nil if the parsing fails.
 json = json
+
+---Retrieves a reference to a loaded CET mod by name.
+---@class GetMod # Not a class — provided by CET.
+---@field GetMod fun(name: string): table? # Returns the mod object if found, or `nil` if the mod is not loaded.
+GetMod = GetMod
 
 ---Provides version information about the currently running CET environment.
 ---@class GetVersion # Not a class — provided by CET.

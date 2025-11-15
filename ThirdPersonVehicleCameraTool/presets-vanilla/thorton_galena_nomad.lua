@@ -1,1 +1,1 @@
-return{ID="4w_Galena_Nomad",Close={y=0.1,d=-0.5},Medium={y=0.1,d=0.7},Far={y=0.1,d=3.8},IsVanilla=true}
+return{ID="4w_Galena_Nomad",Close={y=0.1,d=-0.5},Medium={y=0.1,d=0.5},Far={y=0.1,d=3.7},IsVanilla=true}

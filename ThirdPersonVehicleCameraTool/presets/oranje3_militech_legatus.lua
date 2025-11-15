@@ -1,1 +1,1 @@
-return{ID="oranje3_militech_cam",Close={a=11,x=0,y=0.2,z=2.55,d=1},Medium={a=11,x=0,y=0.2,z=2.95,d=2.5},Far={a=11,x=0,y=0.2,z=3.25,d=6}}
+return{ID="oranje3_militech_cam",Close={a=11,x=0,y=0.15,z=2.55,d=1},Medium={a=11,x=0,y=0.15,z=2.95,d=2.2},Far={a=11,x=0,y=0,z=3.25,d=6}}

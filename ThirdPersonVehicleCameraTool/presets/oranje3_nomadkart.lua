@@ -1,1 +1,1 @@
-return{ID="4w_Shion_Nomad",Close={y=0.05,z=1.2,d=-1.3},Medium={y=0.05,z=1.4,d=-0.4},Far={y=0.05,z=1.6,d=0.9}}
+return{ID="4w_Shion_Nomad",Close={y=0.05,z=1.2,d=-1.3},Medium={y=0.05,z=1.4,d=-0.6},Far={y=0.05,z=1.6,d=1.1}}

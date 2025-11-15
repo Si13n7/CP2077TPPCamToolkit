@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-10-11, 13:39 UTC+01:00 (MEZ)
+Version: 2025-10-14, 00:11 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -22,9 +22,11 @@ return {
 	GUI_YES = "\u{f0026} Yes",
 	GUI_NO = "\u{f073a} No",
 	GUI_NONE = "None",
+	GUI_UNKNOWN = "Unknown",
 
 	--GUI: 🚀 Main Controls
 	GUI_TITLE = "TPP Vehicle Cam Toolkit",
+	GUI_TITLE_SHORT = "TPPVCamTool",
 	GUI_VERSION_WARN = "\u{f0026} This mod requires game version 2.21 or higher and CET version 1.35 or higher. You are using at least one outdated version (game: %s; CET: %s), which may cause issues. Any use is at your own risk. Please do not report any problems unless you meet the minimum requirements.",
 	GUI_MOD_TOGGLE = " Toggle Mod Functionality",
 	GUI_MOD_TOGGLE_TIP = "Enables or disables the mod functionality",
@@ -46,20 +48,26 @@ return {
 	GUI_EDIT_REST_TIP = "Removes the \"presets/%s.lua\" to revert to the default preset.\n\nYou must exit and re-enter the vehicle for the changes to take effect.",
 	GUI_EDIT_OWR_POP = "Replace existing file \"%s\"?",
 
-	--GUI: ⚙️ Global Settings
-	GUI_GSET_DAC = "Disable Auto-Centering",
-	GUI_GSET_DAC_TIP = "Takes effect only after exiting and re-entering the vehicle.",
-	GUI_GSET_DVAN = "Disable Vanilla Presets",
-	GUI_GSET_DVAN_TIP = "Enable this option to leave vanilla vehicles untouched.\n\nSome vanilla vehicles have unusual camera settings that this mod corrects by default.\n\nYou need to reload the presets for the change to fully take effect.",
+	--GUI: ⚒️ Global Settings
+	GUI_GSET_CLOSER_BIKES = "Closer Bike Camera",
+	GUI_GSET_CLOSER_BIKES_TIP = "Moves the camera closer to motorcycles for a tighter, more immersive view.\n\nOnly works for motorcycles that have a preset.\n\nMotorcycle presets cannot be edited while this option is enabled.",
+	GUI_GSET_AUTO_CENTER = "Disable Auto-Centering",
+	GUI_GSET_AUTO_CENTER_TIP = "Disables automatic camera centering.\n\nTakes effect only after exiting and re-entering the vehicle.",
+	GUI_GSET_VAN_PSETS = "Disable Vanilla Presets",
+	GUI_GSET_VAN_PSETS_TIP = "Prevents changes to vanilla vehicles.\n\nSome vanilla vehicles have unusual camera settings that this mod corrects by default.",
 	GUI_GSET_FOV = "Field Of View",
+	GUI_GSET_FOV_DESC = "Determines the vertical field of view, measured in degrees.\n\nMight only work after you exit and enter the vehicle again.",
 	GUI_GSET_FOV_TIP = "Default:|%d|Min:|%d|Max:|%d",
 	GUI_GSET_ZOOM = "Zoom",
+	GUI_GSET_ZOOM_DESC = "Controls the camera zoom level, allowing you to get closer to the subject.",
 	GUI_GSET_ZOOM_TIP = "Default:|%.2f|Min:|%.2f|Max:|%.2f",
 	GUI_GSET_RESET = "\u{f054d} Reset",
 	GUI_GSET_RESET_TIP = "You may need to reload the presets for changes to fully take effect, and some changes only apply after exiting and re-entering the vehicle.",
 	GUI_GSET_ADVANCED = "\u{f0169} Advanced",
-	GUI_GSET_ADVANCED_TIP = "Direct access to all raw global parameters. No automatic calibration or value limits applied",
+	GUI_GSET_ADVANCED_TIP = "Direct access to all raw global parameters. No automatic calibration or value limits applied.\n\nChanges take effect once you exit and get back into the vehicle.",
 	GUI_ASET_TITLE = "\u{f0169} Advanced Settings",
+	GUI_ASET_HEAD1 = "\u{f0bd8} Cars, SUVs, Vans, Trucks, Tanks, etc.",
+	GUI_ASET_HEAD2 = "\u{f037c} Motorcycles",
 
 	--GUI: 🗂️ Preset Explorer
 	GUI_PSET_EXPL_SEARCH_TIP = "\u{f0232} Search Options| |%s|Shows files of vehicles available in the game|%s|Shows files of available custom vehicles|%s|Shows files of vehicles not available in the game|%s|Shows files of vehicles that have been actively used|%s|Shows files of vehicles that exist but have never been used|%s|Shows files of vanilla vehicles|anything|Normal text search",
@@ -93,6 +101,11 @@ return {
 	GUI_TBL_VAL_Y_TIP = "\u{f0d51} Y-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Farther|Increase:|Closer",
 	GUI_TBL_VAL_Z_TIP = "\u{f0d55} Z-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Down|Increase:|Up",
 
+	--NUI: ⚔️ Native Settings UI
+	NUI_CAT_GSET = "Global Settings",
+	NUI_CAT_ASET1 = "Advanced (Cars, SUVs, Vans, Trucks, Tanks, etc.)",
+	NUI_CAT_ASET2 = "Advanced (Motorcycles)",
+
 	--LOG: ℹ️ Info
 	LOG_CAM_OSET_DONE = "Camera offset '%s' is ready.",
 	LOG_CAM_PSET = "Camera preset: '%s' found.",
@@ -105,6 +118,7 @@ return {
 	LOG_MENU_TOGGLE = "Menu scenario triggered overlay state toggle.",
 	LOG_MOD_OFF = "Mod has been disabled!",
 	LOG_MOD_ON = "Mod has been enabled!",
+	LOG_NUI_INIT = "Native Settings UI initialized.",
 	LOG_PARAM_BACKUP = "Backup param (key: '%s'; value: '%s').",
 	LOG_PARAM_IS_LOW = "Param '%s' is low height.",
 	LOG_PARAM_MANIP = "Param manipulation detected (key: '%s'; value: '%s'), reset value to '%s'.",

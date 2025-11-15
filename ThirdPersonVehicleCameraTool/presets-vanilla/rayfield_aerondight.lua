@@ -1,0 +1,1 @@
+return{ID="4w_aerondight",Close={y=-0.16,d=0.4},Medium={y=-0.16,d=1.3},Far={y=-0.14,d=4.7},IsVanilla=true}

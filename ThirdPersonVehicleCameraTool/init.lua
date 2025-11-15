@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-10-11, 13:39 UTC+01:00 (MEZ)
+Version: 2025-10-14, 00:11 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -50,9 +50,9 @@ Development Environment:
 
 ---Represents metadata associated with a specific log level.
 ---@class ILogMeta
----@field TAG string  Text tag prefix shown in console or log output (e.g. "[Error]").
----@field ICON string Unicode icon code representing the log level visually.
----@field TOAST integer  Toast notification type constant from `ImGui.ToastType`.
+---@field TAG string # Text tag prefix shown in console or log output (e.g. "[Error]").
+---@field ICON string # Unicode icon code representing the log level visually.
+---@field TOAST integer # Toast notification type constant from `ImGui.ToastType`.
 
 ---Represents a parsed version number in structured format.
 ---@class IVersion
@@ -71,6 +71,7 @@ Development Environment:
 ---Represents a global options structure.
 ---@class IOptionData
 ---@field DisplayName string # The display name.
+---@field Description string? # The description.
 ---@field Tooltip string # The value tooltip.
 ---@field Default boolean|number # The game's default value.
 ---@field Value (boolean|number)? # The current value.
@@ -214,17 +215,17 @@ local LogMeta = {
 	[LogLevels.INFO] = {
 		TAG = "[Info]",
 		ICON = "\u{f11be}",
-		TOAST = ImGui.ToastType.Info
+		TOAST = ImGui.ToastType and ImGui.ToastType.Info or 0
 	},
 	[LogLevels.WARN] = {
 		TAG = "[Warn]",
 		ICON = "\u{f0d64}",
-		TOAST = ImGui.ToastType.Warning
+		TOAST = ImGui.ToastType and ImGui.ToastType.Warning or 0
 	},
 	[LogLevels.ERROR] = {
 		TAG = "[Error]",
 		ICON = "\u{f0e1c}",
-		TOAST = ImGui.ToastType.Error
+		TOAST = ImGui.ToastType and ImGui.ToastType.Error or 0
 	}
 }
 
@@ -453,11 +454,7 @@ local state = {
 	isCetTopical = false,
 
 	---Determines whether Codeware is installed.
-	isCodewareAvailable = false,
-
-	---If true, temporarily suppresses all logging output regardless of `state.devMode`.
-	---Useful to avoid log spam during mass operations or invalid intermediate states.
-	isLogSuspend = false
+	isCodewareAvailable = false
 }
 
 ---Manages recurring asynchronous timers and their status.
@@ -491,16 +488,24 @@ local config = {
 	---Global option data.
 	---@type table<string, IOptionData>
 	options = {
+		---Mod-only option: moves the camera closer to motorcycles; prevents editing motorcycle presets while enabled.
+		closerBikes = {
+			DisplayName = Text.GUI_GSET_CLOSER_BIKES,
+			Tooltip = Text.GUI_GSET_CLOSER_BIKES_TIP,
+			Default = false
+		},
+
 		---Mod-only option: enables or disables all vanilla presets.
 		noVanilla = {
-			DisplayName = Text.GUI_GSET_DVAN,
-			Tooltip = Text.GUI_GSET_DVAN_TIP,
+			DisplayName = Text.GUI_GSET_VAN_PSETS,
+			Tooltip = Text.GUI_GSET_VAN_PSETS_TIP,
 			Default = false
 		},
 
 		---Game option: adjusts the field of view.
 		fov = {
 			DisplayName = Text.GUI_GSET_FOV,
+			Description = Text.GUI_GSET_FOV_DESC,
 			Tooltip = Text.GUI_GSET_FOV_TIP,
 			Default = DefaultParams.Vars["fov"],
 			Min = 30,
@@ -511,8 +516,8 @@ local config = {
 
 		---Game option: toggles automatic camera reset.
 		lockedCamera = {
-			DisplayName = Text.GUI_GSET_DAC,
-			Tooltip = Text.GUI_GSET_DAC_TIP,
+			DisplayName = Text.GUI_GSET_AUTO_CENTER,
+			Tooltip = Text.GUI_GSET_AUTO_CENTER_TIP,
 			Default = DefaultParams.Vars["lockedCamera"],
 			IsGameOption = true
 		},
@@ -520,6 +525,7 @@ local config = {
 		---Game option: adjusts the zoom.
 		zoom = {
 			DisplayName = Text.GUI_GSET_ZOOM,
+			Description = Text.GUI_GSET_ZOOM_DESC,
 			Tooltip = Text.GUI_GSET_ZOOM_TIP,
 			Default = 1.0,
 			Min = 1.0,
@@ -542,7 +548,13 @@ local config = {
 	isUnsaved = false,
 
 	---Determines whether Advanced Settings have been modified.
-	isAdvancedUnsaved = false
+	isAdvancedUnsaved = false,
+
+	---Active instance of the Native Settings UI mod, if present.
+	nativeInstance = nil,
+
+	---Options from this mod registered in Native Settings UI.
+	nativeOptions = {}
 }
 
 ---Manages camera presets including loading, active state, and usage statistics.
@@ -554,6 +566,10 @@ local presets = {
 	---Container for all camera presets.
 	---@type table<string, ICameraPreset>
 	collection = {},
+
+	---Container for original camera presets.
+	---@type table<string, ICameraPreset>
+	restoreCollection = nil,
 
 	---Determines whether a preset is currently loaded and active.
 	isAnyActive = false,
@@ -590,13 +606,11 @@ local gui = {
 	---Determines whether the CET overlay is open.
 	isOverlayOpen = false,
 
-	---Indicates whether the current ImGui window is being rendered for the first frame.
-	---Used to perform one-time setup operations such as preventing automatic item selection or setting initial focus.
-	isFirstFrame = false,
+	---Tracks whether each registered window is being rendered for the first frame.
+	---Used to perform one-time setup operations per window, such as preventing automatic item selection or setting initial focus.
+	hasInitialized = {},
 
-	---Forces a one–frame skip in `onDraw` after certain events (e.g. onUnmount).
-	---Used to ensure `getMetrics()` is executed once, then discarded,
-	---so the next frame can rebuild the window with a clean width.
+	---Forces a one-frame skip in `onDraw` so a window using `ImGuiWindowFlags.AlwaysAutoResize` can shrink again.
 	forceMetricsReset = true,
 
 	---Indicates whether window bounds validation is currently active.
@@ -880,6 +894,19 @@ local function areNumeric(...)
 	return true
 end
 
+---Returns a string format pattern for representing numeric values with adaptive precision.
+---If the number is less than 1, the number of decimal places is determined dynamically
+---based on the negative order of magnitude (e.g., 0.1 → "%.1f", 0.01 → "%.2f").
+---For numbers greater than or equal to 1, the format "%.0f" is returned for integer rounding.
+---@param value number # The numeric value for which to determine the format.
+---@return string # The format pattern suitable for string.format.
+local function getFloatFormat(value)
+	if isNumber(value) and value > 0 and value < 1 then
+		return "%." .. math.abs(math.floor(math.log(value, 10))) .. "f"
+	end
+	return "%.0f"
+end
+
 ---Checks whether a numeric value lies within a specified inclusive range.
 ---@param value number # The value to check.
 ---@param min number? # The minimum allowed value. Defaults to -infinity if not a number.
@@ -1109,15 +1136,35 @@ local function trimLuaExt(s)
 	return hasLuaExt(s) and s:sub(1, -5) or s
 end
 
+---Truncates a string in the middle if it exceeds a maximum length and inserts "..." to indicate omitted content.
+---@param s string # The original string.
+---@param length integer # The maximum allowed length of the returned string.
+---@return string # The truncated string with "..." in the middle if needed.
+local function truncateMiddle(s, length)
+	if not isStringValid(s) then return "" end
+	if #s <= length then return s end
+	local half = floor((length - 3) / 2)
+	return s:sub(1, half) .. "..." .. s:sub(#s - half + 1)
+end
+
 ---Capitalizes the first letter of each word in a string.
----@param s string? # The input string to process.
+---@param s string # The input string to process.
 ---@return string # The string with each word's first letter capitalized.
 local function capitalizeWords(s)
-	if not s then return "" end
-	s = tostring(s)
+	if not isStringValid(s) then return "" end
 	return s:gsub("(%w)([%w']*)", function(first, rest)
 		return first:upper() .. rest:lower()
 	end) or s
+end
+
+---Converts a camelCase string into a human-readable title.
+---@param s string # The camelCase string to convert.
+---@return string # A title-cased string with spaces inserted before uppercase letters.
+local function camelToTitle(s)
+	if not isStringValid(s) then return "" end
+	s = s:gsub("(%l)(%u)", "%1 %2")
+	s = s:gsub("^%l", string.upper)
+	return s
 end
 
 ---Splits a string into a list of substrings using a specified separator.
@@ -1245,6 +1292,24 @@ local function clone(t, seen)
 	end
 
 	return result
+end
+
+---Merges multiple tables into a cloned base table.
+---Each additional table overrides existing values in order of appearance.
+---@param base table # The base table to clone.
+---@param ... table # One or more tables whose values override those in the cloned base.
+---@return table # A merged clone containing values from all provided tables.
+local function merge(base, ...)
+	local merged = clone(base) or {}
+	for i = 1, select("#", ...), 1 do
+		local t = select(i, ...)
+		if isTableValid(t) then
+			for k, v in pairs(t) do
+				merged[k] = clone(v)
+			end
+		end
+	end
+	return merged
 end
 
 ---Ensures a nested table path exists and returns the deepest subtable if `t` is a valid table.
@@ -1667,7 +1732,7 @@ end
 ---@param fmt string # A format string for the message.
 ---@vararg any # Additional arguments for formatting the message. Tables and userdata will be serialized automatically.
 local function log(lvl, id, fmt, ...)
-	if state.isLogSuspend or state.devMode < DevLevels.BASIC then return end
+	if state.devMode < DevLevels.BASIC then return end
 
 	lvl = clamp(lvl, LogLevels.INFO, LogLevels.ERROR)
 
@@ -1681,7 +1746,7 @@ local function log(lvl, id, fmt, ...)
 	local now = os.time()
 	if cache[hash] and cache[hash] >= now then return end
 
-	local cutoff = now - 60
+	local cutoff = now - 5
 	for k, v in pairs(cache) do
 		if v < cutoff then
 			cache[k] = nil
@@ -1705,7 +1770,7 @@ local function log(lvl, id, fmt, ...)
 		local ok, result = pcall(format, fmt, unpack(args))
 		str = ok and result or Text.LOG_FORMAT_INVALID
 	end
-	local msg = format("[TPVCamTool]  [%04X]  %s  %s", id or 0, tag, str)
+	local msg = format("[%s]  [%04X]  %s  %s", Text.GUI_TITLE_SHORT, id or 0, tag, str)
 
 	if state.devMode >= DevLevels.FULL then
 		(lvl == LogLevels.ERROR and spdlog.error or spdlog.info)(msg)
@@ -1737,10 +1802,9 @@ end
 ---@param fmt string # Format string for the message.
 ---@vararg any # Optional arguments for formatting the message. Tables and userdata will be serialized automatically.
 local function logF(mode, lvl, id, fmt, ...)
-	if mode < DevLevels.BASIC or state.isLogSuspend and mode < DevLevels.OVERLAY then return end
+	if mode < DevLevels.BASIC and mode < DevLevels.OVERLAY then return end
 	local prev = state.devMode
 	state.devMode = prev < mode and mode or prev
-	state.isLogSuspend = false
 	log(lvl, id, fmt, ...)
 	state.devMode = prev
 end
@@ -1754,7 +1818,6 @@ end
 ---@vararg any # Optional arguments for formatting the message. Tables and userdata will be serialized automatically.
 local function logIf(mode, lvl, id, fmt, ...)
 	if state.devMode == DevLevels.DISABLED or state.devMode < mode then return end
-	state.isLogSuspend = false
 	log(lvl, id, fmt, ...)
 end
 
@@ -2338,6 +2401,37 @@ local function updateConfigDefaultParam(name, value, updateConfig)
 		option.Value = value
 	end
 
+	if name == "closerBikes" then
+		if isTableValid(presets.restoreCollection) then
+			for key, preset in pairs(presets.restoreCollection) do
+				presets.collection[key] = preset
+			end
+		end
+
+		if value == true then
+			presets.restoreCollection = {}
+			for key, preset in pairs(presets.collection) do
+				local isDef = preset.IsDefault
+				local id = preset.ID
+				if isDef or not equalsAny(id, "2w_Preset", "Brennan_Preset") then goto continue end
+
+				local defPreset = get(presets.collection, {}, id)
+				if not isTableValid(defPreset) then goto continue end ---@cast defPreset ICameraPreset
+
+				presets.restoreCollection[key] = clone(preset)
+
+				preset.Far = merge(defPreset.Medium, preset.Medium)
+				preset.Medium = merge(defPreset.Close, preset.Close)
+
+				preset.Close = merge(defPreset.Close, preset.Close)
+				preset.Close.a = 12
+				preset.Close.d = -0.7
+
+				::continue::
+			end
+		end
+	end
+
 	if not option.IsGameOption or not isRestore and not isVehicleMounted() then return end
 
 	for _, section in ipairs(DefaultParams.Keys) do
@@ -2345,8 +2439,7 @@ local function updateConfigDefaultParam(name, value, updateConfig)
 		local curVal = TweakDB:GetFlat(key)
 		if curVal ~= nil and not equals(curVal, value) then
 			TweakDB:SetFlat(key, value)
-			logIf(DevLevels.ALERT, LogLevels.INFO, 0xeef2,
-				isRestore and Text.LOG_PARAM_REST or Text.LOG_PARAM_SET, key, value)
+			logIf(DevLevels.ALERT, LogLevels.INFO, 0xeef2, isRestore and Text.LOG_PARAM_REST or Text.LOG_PARAM_SET, key, value)
 		end
 	end
 
@@ -2859,7 +2952,7 @@ local function applyPreset(preset, id)
 		local cid = key and getVehicleCameraID()
 		if not (key and cid) then return end
 
-		logIf(DevLevels.ALERT, LogLevels.INFO, 0x9583, Text.LOG_CAM_PSET, key)
+		log(LogLevels.INFO, 0x9583, Text.LOG_CAM_PSET, key)
 
 		local pset = presets.collection[key]
 		if not isTableValid(pset) then return end
@@ -3259,7 +3352,6 @@ local function loadPresetsFrom(path)
 			end
 
 			local text = isDef and Text.LOG_PSETS_LOAD_DEF or Text.LOG_PSETS_LOAD_VAN
-			state.isLogSuspend = false
 			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, text, count, #files - 1, duration)
 			return
 		end
@@ -3269,6 +3361,9 @@ local function loadPresetsFrom(path)
 			task.IsActive = false
 			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_CUS, 0, 0, 0)
 			logF(DevLevels.ALERT, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_DONE, task.Duration)
+			if isFunction(task.Finalizer) then
+				task.Finalizer()
+			end
 			return
 		end
 
@@ -3310,8 +3405,6 @@ local function loadPresetsFrom(path)
 			local duration = task.EndTime - task.StartTime
 			task.Duration = task.Duration + duration
 
-			state.isLogSuspend = false
-
 			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_CUS, count, length, duration)
 
 			local ignored = length - count
@@ -3338,7 +3431,7 @@ local function loadPresetsFrom(path)
 		local interval, amount = 0, 0
 		asyncRepeatBurst(interval, function(id)
 			local map, quantity = getAllUniqueVehicleIdentifiers(true)
-			logIf(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_VEH_UIDS, quantity)
+			log(LogLevels.INFO, 0x98e0, Text.LOG_VEH_UIDS, quantity)
 			if quantity == amount or interval >= 1 then
 				asyncStop(id)
 				names = map
@@ -3667,7 +3760,7 @@ local function getEditorBundle(name, appName, id, key)
 			return
 		end
 
-		bundle.Flux = getEditorPreset(flux, key)
+		bundle.Flux = getEditorPreset(flux, key, true)
 		bundle.Pivot = getEditorPreset(flux, key, true)
 		bundle.Finale = getEditorPreset(flux, key, true, true)
 
@@ -4170,7 +4263,7 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 
 	ImGui.SetNextWindowPos(x, y)
 
-	height = math.max(height, 210 * scale)
+	height = math.max(height, 240 * scale)
 	ImGui.SetNextWindowSize(width, height)
 
 	local flags = bor(
@@ -4181,6 +4274,11 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 	)
 	config.isOpen = ImGui.Begin(Text.GUI_SETTINGS, config.isOpen, flags)
 	if not config.isOpen then return false end
+
+	if not gui.hasInitialized[Text.GUI_SETTINGS] then
+		gui.hasInitialized[Text.GUI_SETTINGS] = true
+		ImGui.SetKeyboardFocusHere(-1)
+	end
 
 	if not isTableValid(config.options) or not ImGui.BeginTable("GlobalOptions", 2, ImGuiTableFlags.Borders) then
 		ImGui.End()
@@ -4204,10 +4302,11 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 		ImGui.TableNextColumn()
 		local current = option.Value
 		local label = "##" .. key
+		local changed, recent = false, nil
 		if isBoolean(current) then ---@cast current boolean
-			local recent = ImGui.Checkbox(label, current)
+			recent = ImGui.Checkbox(label, current)
 			if recent ~= current then
-				updateConfigDefaultParam(key, recent, true)
+				changed = true
 			end
 			addTooltip(scale, option.Tooltip)
 		elseif isNumber(current) then ---@cast current number
@@ -4220,10 +4319,10 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 			ImGui.PushItemWidth(floor(24 * scale * #format("%3s", max) * 0.5))
 
 			local speed = option.Speed or 0.01
-			local fmt = speed < 1 and ("%." .. abs(floor(math.log(speed, 10))) .. "f") or "%.0f"
-			local recent = ImGui.DragFloat(label, current, speed, min, max, fmt)
+			local fmt = getFloatFormat(speed)
+			recent = ImGui.DragFloat(label, current, speed, min, max, fmt)
 			if recent ~= current and inRange(recent, min, max) then
-				updateConfigDefaultParam(key, recent, true)
+				changed = true
 			end
 
 			ImGui.PopItemWidth()
@@ -4231,6 +4330,13 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 			addTooltip(nil, split(format(option.Tooltip, option.Default, min, max), "|"))
 		else
 			ImGui.Text(Text.GUI_NONE)
+		end
+
+		if changed then
+			updateConfigDefaultParam(key, recent, true)
+			if config.nativeInstance and config.nativeOptions[key] then
+				config.nativeInstance.setOption(config.nativeOptions[key], recent)
+			end
 		end
 
 		::continue::
@@ -4252,6 +4358,9 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 	if ImGui.Button(Text.GUI_GSET_RESET, buttonWidth, buttonHeight) then
 		for key, option in pairs(config.options) do
 			updateConfigDefaultParam(key, option.Default, true)
+			if config.nativeInstance and config.nativeOptions[key] then
+				config.nativeInstance.setOption(config.nativeOptions[key], option.Default)
+			end
 		end
 	end
 	addTooltip(scale, Text.GUI_GSET_RESET_TIP)
@@ -4291,11 +4400,19 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 		return
 	end
 
+	if not gui.hasInitialized[Text.GUI_ASET_TITLE] then
+		gui.hasInitialized[Text.GUI_ASET_TITLE] = true
+		ImGui.SetKeyboardFocusHere(-1)
+	end
+
 	local cache = getCache(0x2e7c) or {}
-	local wheels = { "\u{f07ac} ", "\u{f037c} " }
+	local header = {
+		Text.GUI_ASET_HEAD1,
+		Text.GUI_ASET_HEAD2
+	}
 	local _, regionHeight, frameHeight = ImGui.GetContentRegionAvail()
 	for i, section in ipairs(DefaultParams.Keys) do
-		cache[i] = ImGui.CollapsingHeader(wheels[i] .. section, bor(ImGuiTreeNodeFlags.DefaultOpen))
+		cache[i] = ImGui.CollapsingHeader(header[i], bor(ImGuiTreeNodeFlags.DefaultOpen))
 		if not cache[i] then goto continue end
 
 		frameHeight = frameHeight or ImGui.GetFrameHeight()
@@ -4310,13 +4427,15 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 					if config.options[var] then goto continue end
 
 					ImGui.TableNextColumn()
-					ImGui.Text(var)
+
+					local text = camelToTitle(var)
+					ImGui.Text(text)
 
 					ImGui.TableNextColumn()
 
 					local default = pluck(values, i)
 					local current = get(config.advancedOptions, default, i, var)
-					local recent
+					local changed, recent = false, nil
 					ImGui.PushItemWidth(-1)
 					if isBoolean(current) then
 						recent = ImGui.Checkbox("##" .. var .. i, current)
@@ -4329,6 +4448,7 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 
 					local option = deep(config.advancedOptions, i)
 					if recent ~= nil then
+						changed = true
 						if equals(recent, default) then
 							if get(option, nil, var) ~= nil then
 								config.isAdvancedUnsaved = true
@@ -4347,6 +4467,7 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 					ImGui.BeginDisabled(isUndoOff)
 					ImGui.PushItemWidth(-1)
 					if ImGui.Button("\u{f054d}##" .. var .. i) then
+						recent = default
 						if get(option, nil, var) ~= nil then
 							config.isAdvancedUnsaved = true
 							option[var] = default
@@ -4355,6 +4476,10 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 					ImGui.EndDisabled()
 					popColors(pushdColors)
 					ImGui.PopItemWidth()
+
+					if changed and config.nativeInstance and config.nativeOptions[i .. var] then
+						config.nativeInstance.setOption(config.nativeOptions[i .. var], recent)
+					end
 
 					::continue::
 				end
@@ -4429,6 +4554,11 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 	if isValidated then
 		ImGui.End()
 		return
+	end
+
+	if not gui.hasInitialized[Text.GUI_PSET_EXPL] then
+		gui.hasInitialized[Text.GUI_PSET_EXPL] = true
+		ImGui.SetKeyboardFocusHere(-1)
 	end
 
 	local barFlags = bor(ImGuiTableFlags.NoBordersInBody, ImGuiTableFlags.SizingFixedFit)
@@ -4657,6 +4787,18 @@ local function onInit()
 			clearLastEditorBundle()
 			resetCache()
 			applyPreset()
+
+			local available = false
+			for _, preset in pairs(presets.collection) do
+				if not preset.IsDefault and equalsAny(preset.ID, "2w_Preset", "Brennan_Preset") then
+					available = true
+					break
+				end
+			end
+			if not available then
+				config.options.closerBikes.Value = false
+				config.options.closerBikes.IsNotAvailable = true
+			end
 		end
 	end
 
@@ -4670,7 +4812,6 @@ end
 local function onUnmount(force)
 	if not force and not state.isModEnabled then return end
 
-	state.isLogSuspend = false
 	if not force and state.devMode >= DevLevels.ALERT then
 		log(LogLevels.INFO, 0x9dee, Text.LOG_EVNT_UMNT)
 	end
@@ -4772,7 +4913,7 @@ registerForEvent("onInit", function()
 	--Ensures the log file is fresh when the mod initializes.
 	pcall(function()
 		local name = "ThirdPersonVehicleCameraTool"
-		for i = 1, 9, 1 do
+		for i = 1, 9 do
 			local path = format("%s.%d.log", name, i)
 			if not fileExists(path) then
 				break
@@ -4937,12 +5078,148 @@ registerForEvent("onInit", function()
 			end
 		end
 	end
+
+	--Initializes the Native Settings UI addon.
+	asyncOnce(3, function()
+		local native = GetMod("nativeSettings")
+		if not native then return end
+		config.nativeInstance = native
+
+		local tab = "/" .. Text.GUI_TITLE_SHORT
+		if not native.pathExists(tab) then
+			native.addTab(tab, Text.GUI_TITLE)
+		end
+
+		--Global Settings
+		local cat = combine(tab, "GlobalSettings")
+		if native.pathExists(cat) then
+			native.removeSubcategory(cat)
+		end
+		native.addSubcategory(cat, Text.NUI_CAT_GSET)
+
+		local isSaving = {}
+		local function saveToFile(advanced)
+			if isSaving[advanced] then return end
+			isSaving[advanced] = true
+			asyncRepeat(3, function(id)
+				if nilOrEmpty(native.currentTab) then
+					asyncStop(id)
+					isSaving[advanced] = false
+					if advanced == 0 then
+						saveGlobalOptions()
+					else
+						config.isAdvancedUnsaved = true
+						saveAdvancedOptions()
+					end
+				end
+			end)
+		end
+
+		for key, option in opairs(config.options, "DisplayName") do
+			if option.IsNotAvailable then goto continue end
+
+			local function setValue(value)
+				updateConfigDefaultParam(key, value, true)
+				saveToFile(0)
+			end
+
+			local label = option.DisplayName
+			local description = option.Description or option.Tooltip
+			local default = option.Default
+			local current = option.Value
+			local speed = option.Speed
+
+			if isBoolean(default) then
+				config.nativeOptions[key] = native.addSwitch(cat, label, description, current, default, setValue)
+			elseif isNumber(default) then
+				local isFloat = speed % 1 ~= 0
+
+				local parameters = {
+					cat,
+					label,
+					description,
+					option.Min,
+					option.Max,
+					speed,
+					isFloat and getFloatFormat(speed) or current,
+					isFloat and current or default,
+					isFloat and default or setValue
+				}
+				if isFloat then
+					insert(parameters, setValue)
+				end
+
+				config.nativeOptions[key] = (isFloat and native.addRangeFloat or native.addRangeInt)(unpack(parameters))
+			end
+
+			::continue::
+		end
+
+		--Advanced Settings
+		local cats = {
+			Text.NUI_CAT_ASET1,
+			Text.NUI_CAT_ASET2,
+		}
+		for i in ipairs(DefaultParams.Keys) do
+			cat = combine(tab, "AdvancedSettings" .. i)
+			if native.pathExists(cat) then
+				native.removeSubcategory(cat)
+			end
+			native.addSubcategory(cat, cats[i])
+
+			for var, values in opairs(DefaultParams.Vars) do
+				if config.options[var] then goto continue end
+
+				local default = pluck(values, i)
+				local current = get(config.advancedOptions, default, i, var)
+
+				local function setValue(value)
+					local option = deep(config.advancedOptions, i)
+					if value ~= nil then
+						if equals(value, default) then
+							if get(option, nil, var) ~= nil then
+								option[var] = default
+								saveToFile(1)
+							end
+						elseif not equals(value, current) then
+							option[var] = value
+							saveToFile(1)
+						end
+					end
+				end
+
+				local label = truncateMiddle(camelToTitle(var), 48)
+				local desc = Text.GUI_GSET_ADVANCED_TIP
+				if isBoolean(default) then
+					config.nativeOptions[i .. var] = native.addSwitch(cat, label, desc, current, default, setValue)
+				elseif isNumber(default) then
+					config.nativeOptions[i .. var] =
+						native.addRangeFloat(
+							cat,
+							label,
+							desc,
+							abs(default + 1) * -100,
+							abs(default + 1) * 100,
+							0.1,
+							"%.01f",
+							current,
+							default,
+							setValue
+						)
+				end
+
+				::continue::
+			end
+		end
+
+		logF(DevLevels.BASIC, LogLevels.INFO, 0x60b9, Text.LOG_NUI_INIT)
+	end)
 end)
 
 --Detects when the CET overlay is opened.
 registerForEvent("onOverlayOpen", function()
 	gui.isOverlayOpen = true
-	gui.isFirstFrame = true
+	gui.hasInitialized = {}
 end)
 
 --Detects when the CET overlay is closed.
@@ -4991,12 +5268,6 @@ registerForEvent("onDraw", function()
 	end
 	if not ImGui.Begin(Text.GUI_TITLE, flags) then return end
 
-	--Preventing automatic item selection.
-	if gui.isFirstFrame then
-		gui.isFirstFrame = false
-		ImGui.SetKeyboardFocusHere(-1)
-	end
-
 	--Forces ImGui to rebuild the window on the next frame with fresh metrics.
 	if gui.forceMetricsReset then
 		gui.forceMetricsReset = false
@@ -5015,6 +5286,12 @@ registerForEvent("onDraw", function()
 	local isLocked = gui.isOverlayLocked
 	if isLocked or presets.loaderTask.IsActive then
 		ImGui.BeginDisabled(true)
+	else
+		--Preventing automatic item selection.
+		if not gui.hasInitialized[Text.GUI_TITLE] then
+			gui.hasInitialized[Text.GUI_TITLE] = true
+			ImGui.SetKeyboardFocusHere(-1)
+		end
 	end
 
 	--Computes scaled layout values.
@@ -5134,7 +5411,6 @@ registerForEvent("onDraw", function()
 			ImGui.Dummy(controlPadding, 0)
 			ImGui.SameLine()
 			if ImGui.Button(Text.GUI_PSETS_RLD, buttonWidth, buttonHeight) then
-				state.isLogSuspend = false
 				editor.bundles = {}
 				resetCache()
 				restoreAllPresets()
@@ -5199,7 +5475,7 @@ registerForEvent("onDraw", function()
 		function()
 			displayName = cache.displayName
 			if isString(displayName) then return displayName end
-			displayName = getVehicleDisplayName() or Text.GUI_NONE
+			displayName = getVehicleDisplayName() or Text.GUI_UNKNOWN
 			cache.displayName = displayName
 			setCache(0xcb3d, cache)
 			return displayName
@@ -5219,7 +5495,7 @@ registerForEvent("onDraw", function()
 				[0] = Text.GUI_TBL_VAL_STATUS_0,
 				[1] = Text.GUI_TBL_VAL_STATUS_1,
 				[2] = Text.GUI_TBL_VAL_STATUS_2
-			})[status] or Text.GUI_NONE
+			})[status] or Text.GUI_UNKNOWN
 			cache.statusText = statusText
 			setCache(0xcb3d, cache)
 			return statusText
@@ -5244,7 +5520,6 @@ registerForEvent("onDraw", function()
 	end
 
 	if failed then
-		state.isLogSuspend = true
 		if state.devMode > DevLevels.DISABLED then
 			if not isLocked and not vehicle then
 				addText(Text.GUI_STATE_NO_VEH, Colors.CARAMEL, halfHeightPadding, contentWidth, itemSpacing)
@@ -5388,17 +5663,18 @@ registerForEvent("onDraw", function()
 			elseif row.isEditable then
 				local namWidth = math.min(ImGui.CalcTextSize(name), 302)
 				local appWidth = math.min(ImGui.CalcTextSize(appName), 302)
-				local maxWidth = math.max(namWidth, appWidth)
-				local width = math.min(maxWidth, maxInputWidth) + doubleHeightPadding
+				local width = clamp(appWidth, namWidth, maxInputWidth) + doubleHeightPadding
 				ImGui.PushItemWidth(width)
 
 				local color
 				if flux.Name ~= flux.Key then
 					color = Colors.GARNET
-				elseif flux.Name == finale.Name then
-					color = Colors.FIR
-				else
+				elseif isStillVisible and tasks.Restore then
+					color = Colors.OLIVE
+				elseif isStillVisible and tasks.Save then
 					color = Colors.CARAMEL
+				else
+					color = Colors.FIR
 				end
 				local pushd = row.value ~= id and pushColors(ImGuiCol.FrameBg, color) or 0
 
@@ -5453,12 +5729,12 @@ registerForEvent("onDraw", function()
 
 				local rawValue = tostring(row.value or Text.GUI_NONE)
 				local value = rawValue
-				local maxWidth = 290 * scale
+				local maxSize = floor(290 * scale)
 
-				if ImGui.CalcTextSize(value) > maxWidth then
+				if ImGui.CalcTextSize(value) > maxSize then
 					repeat
 						value = value:sub(1, -2)
-					until ImGui.CalcTextSize(value) <= maxWidth
+					until ImGui.CalcTextSize(value) <= maxSize
 					value = value .. "..."
 				end
 
@@ -5543,8 +5819,18 @@ registerForEvent("onDraw", function()
 				ImGui.TableNextColumn()
 				ImGui.PushItemWidth(-1)
 
-				local pushd = not equals(curVal, defVal) and
-					pushColors(ImGuiCol.FrameBg, (id ~= presetName and Colors.FIR or Colors.GARNET)) or 0
+				local color
+				if not equals(curVal, defVal) then
+					if id == presetName then
+						color = Colors.GARNET
+					elseif isStillVisible and tasks.Save then
+						color = Colors.CARAMEL
+					else
+						color = Colors.FIR
+					end
+				end
+				local pushd = color and pushColors(ImGuiCol.FrameBg, color) or 0
+
 				local recent = ImGui.DragFloat(format("##%s_%s", level, field), curVal, speed, minVal, maxVal, fmt)
 				if not equals(recent, curVal) then
 					recent = clamp(recent, minVal, maxVal)

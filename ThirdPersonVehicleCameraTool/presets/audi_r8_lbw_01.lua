@@ -1,1 +1,1 @@
-return{ID="4w_911",Close={y=-0.08,d=0.35},Medium={y=-0.08,d=1.75},Far={y=-0.08,d=4.25}}
+return{ID="4w_911",Close={y=-0.08,d=0.35},Medium={y=-0.08,d=1.5},Far={y=-0.08,d=4.7}}

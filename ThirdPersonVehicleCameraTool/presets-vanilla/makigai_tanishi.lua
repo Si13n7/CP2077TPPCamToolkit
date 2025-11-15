@@ -1,1 +1,1 @@
-return{ID="4w_Tanishi",Close={y=0,d=-0.4},Medium={y=0,d=0.8},Far={y=0},IsVanilla=true}
+return{ID="4w_Tanishi",Close={y=0,d=-0.4},Medium={y=0,d=0.7},Far={y=0,d=4.2},IsVanilla=true}

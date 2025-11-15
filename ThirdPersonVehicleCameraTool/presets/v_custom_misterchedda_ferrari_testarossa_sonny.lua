@@ -1,1 +1,1 @@
-return{ID="4w_herrera_outlaw",Close={y=0.13,d=-0.3},Medium={y=0.13,z=1.65,d=1.1},Far={y=0.13,z=2.25,d=3.6}}
+return{ID="4w_herrera_outlaw",Close={y=0.13,d=-0.3},Medium={y=0.13,z=1.65,d=0.8},Far={y=0.13,z=2.25,d=3.9}}
