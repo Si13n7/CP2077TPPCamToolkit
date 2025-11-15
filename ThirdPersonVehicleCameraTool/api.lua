@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-05-07, 21:52 UTC+01:00 (MEZ)
+Version: 2025-05-11, 12:40 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -69,6 +69,8 @@ ______________________________________________
 ---@field PushStyleColor fun(idx: integer, color: integer) # Pushes a new color style override for the current ImGui context.
 ---@field PopStyleColor fun(count?: integer) # Removes one or more pushed style colors from the stack. Default count is 1.
 ---@field PopStyleColor fun(count?: integer) # Removes one or more pushed style colors from the stack. Default count is 1.
+---@field BeginDisabled fun(disabled: boolean) # Begins a block in which all contained UI elements are disabled (grayed out and unclickable) if `disabled` is true. Must be closed with `ImGui.EndDisabled()`.
+---@field EndDisabled fun() # Ends a disabled UI block started by `ImGui.BeginDisabled()`. Re-enables UI interaction.
 ---@field ShowToast fun(toast: ImGui.Toast) # Displays a Toast notification instance immediately.
 ImGui = ImGui
 

@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-05-07, 21:52 UTC+01:00 (MEZ)
+Version: 2025-05-11, 12:40 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -70,7 +70,7 @@ ______________________________________________
 ---@field IsDefault boolean? # Determines whether this camera preset is a default one.
 ---@field IsJoined boolean? # Determines whether this camera preset was newly generated as a default.
 
----Tracks usage statistics for a camera preset.
+---Represents usage statistics for a camera preset.
 ---@class IPresetUsage
 ---@field First number # Timestamp of the first time this preset was applied.
 ---@field Last number # Timestamp of the most recent time this preset was applied.
@@ -84,7 +84,7 @@ ______________________________________________
 ---@field Token number # Adler‑32 checksum of `Preset`, used to detect changes.
 ---@field IsPresent boolean # True if a corresponding preset file exists on disk.
 
----Tracks pending actions for a modified camera preset within the editor workflow.
+---Represents pending actions for a modified camera preset within the editor workflow.
 ---@class IEditorTasks
 ---@field Rename boolean # True if the preset has been renamed but the file itself still needs to be renamed.
 ---@field Validate boolean # True if angles or offsets have changed, used to highlight buttons.
@@ -205,6 +205,24 @@ local dev_mode = DevLevels.DISABLED
 ---@type boolean
 local log_suspend = false
 
+---Tracks recently logged message hashes to prevent repeated output within a short timeframe.
+---Each key is a formatted log message string, and the value is a Unix timestamp (os.time())
+---indicating the next allowed log time. Used for throttling duplicate log output.
+---@type table<integer, integer>
+local log_timeout = {}
+
+---Stores all active recurring timers, indexed by their unique ID.
+---@type table<integer, {interval: number, callback: function, time: number, active: boolean}>
+local call_timers = {}
+
+---Auto-incrementing ID used to assign unique keys to each timer in `call_timers`.
+---@type integer
+local call_id_counter = 0
+
+---Indicates whether at least one recurring timer is active.
+---Used to skip unnecessary processing in `onUpdate` event when no timers exist.
+local call_is_active
+
 ---Persistent cache for storing reusable or computed values across sessions.
 ---Unlike `vehicle_cache`, it retains data throughout the CET runtime.
 ---@type table<string, any>
@@ -226,6 +244,12 @@ local toaster_bumps = {}
 ---Determines whether the CET overlay is open.
 ---@type boolean
 local overlay_open = false
+
+---Indicates whether the CET overlay UI should be temporarily disabled.
+---Used to trigger `ImGui.BeginDisabled(true)` in frames where no user interaction is allowed,
+---e.g., during loading sequences or pending asynchronous operations.
+---@type boolean
+local overlay_locked = false
 
 ---Current horizontal padding value used for centering UI elements.
 ---Dynamically adjusted based on available window width.
@@ -280,87 +304,19 @@ local file_man_search
 
 --#region 🔧 Utility Functions
 
----Logs and displays messages based on the current `dev_mode` level.
----Messages can be written to the log file, printed to the console, or shown as in-game alerts.
----@param lvl LogLevelType # Logging level (0 = Info, 1 = Warning, 2 = Error).
----@param id integer # The ID used for location tracing.
----@param fmt string # A format string for the message.
----@vararg any # Additional arguments for formatting the message.
-local function log(lvl, id, fmt, ...)
-	if log_suspend or dev_mode == DevLevels.DISABLED then return end
-
-	local msg = format("[TPVCamTool]  [%04X]  ", id and id or -1)
-	if fmt == nil then
-		lvl = LogLevels.ERROR
-	end
-
-	if lvl >= LogLevels.ERROR then
-		msg = msg .. "[Error]  "
-	elseif lvl == LogLevels.WARN then
-		msg = msg .. "[Warn]  "
-	else
-		msg = msg .. "[Info]  "
-	end
-	msg = format(msg .. (fmt or "Format string in log() is empty!"), ...)
-
-	if dev_mode >= DevLevels.FULL then
-		if lvl == LogLevels.ERROR then
-			spdlog.error(msg)
-		else
-			spdlog.info(msg)
-		end
-	end
-	if dev_mode >= DevLevels.ALERT then
-		if runtime_full then
-			local toast = "\u{f035f} " .. msg
-
-			local t
-			if lvl == LogLevels.ERROR then
-				t = ImGui.ToastType.Error
-			elseif lvl == LogLevels.WARN then
-				t = ImGui.ToastType.Warning
-			else
-				t = ImGui.ToastType.Info
-			end
-
-			local s = toaster_bumps[t]
-			toaster_bumps[t] = s and format("%s\n\n%s", s, toast) or toast
-
-			toaster_active = true
-		else
-			local player = Game.GetPlayer()
-			if player then
-				player:SetWarningMessage(msg, 5)
-			end
-		end
-	end
-	if dev_mode >= DevLevels.BASIC then
-		print(msg)
-	end
-end
-
----Forces a log message to be emitted using a temporary `dev_mode` override.
----Useful for outputting messages regardless of the current developer mode setting.
----Internally calls `log()` with the given parameters, then restores the previous `dev_mode`.
----@param mode DevLevelType # Temporary debug mode to use.
----@param lvl LogLevelType # Log level passed to `log()`.
----@param id integer # The ID used for location tracing.
----@param fmt string # Format string for the message.
----@vararg any # Optional arguments for formatting the message.
-local function logF(mode, lvl, id, fmt, ...)
-	if mode <= DevLevels.DISABLED then return end
-	local prev = dev_mode
-	dev_mode = prev < mode and mode or prev
-	log(lvl, id, fmt, ...)
-	dev_mode = prev
-end
-
 ---Checks whether the provided argument is of the specified type.
 ---@param t string # The expected type name.
 ---@param v any # The value to check against the specified type.
 ---@return boolean # Returns `true` if the argument match the specified type, `false` otherwise.
 local function isType(t, v)
 	return type(v) == t
+end
+
+---Checks whether all provided arguments is of type `function`.
+---@param n any # Value to check.
+---@return boolean # True if the argument is a function, false otherwise.
+local function isFunction(n)
+	return isType("function", n)
 end
 
 ---Checks whether the provided argument is of type `boolean`.
@@ -412,7 +368,7 @@ end
 ---@param v any # The value to check against the specified type.
 ---@return boolean # Returns `true` if the argument match the specified type, `false` otherwise.
 local function isMetaType(t, v)
-	if type(v) ~= "userdata" then return false end
+	if not isUserdata(v) then return false end
 
 	local m = getmetatable(v)
 	return m and m.__name == t
@@ -822,9 +778,8 @@ local function pick(i, ...)
 	local len = select("#", ...)
 	if i <= len then
 		return select(i, ...)
-	else
-		return select(len, ...)
 	end
+	return select(len, ...)
 end
 
 ---Converts any value to a readable string representation.
@@ -901,7 +856,7 @@ local function fileExists(path)
 	return false
 end
 
----Parses a version string or returns an existing IVersion table.
+---Parses a version string or returns an existing `IVersion` table.
 ---Accepts version formats like "[v]Major[.Minor[.Build[.Revision]]]".
 ---@param x table|string # A version input as a string, or IVersion table.
 ---@return IVersion # A table with Major, Minor, Build, and Revision fields as numbers.
@@ -960,6 +915,109 @@ end
 local function getRecordName(data)
 	if not data then return nil end
 	return tostring(data):match("%-%-%[%[(.-)%-%-%]%]"):match("^%s*(.-)%s*$")
+end
+
+---Logs and displays messages based on the current `dev_mode` level.
+---Messages can be written to the log file, printed to the console, or shown as in-game alerts.
+---@param lvl LogLevelType # Logging level (0 = Info, 1 = Warning, 2 = Error).
+---@param id integer # The ID used for location tracing.
+---@param fmt string # A format string for the message.
+---@vararg any # Additional arguments for formatting the message.
+local function log(lvl, id, fmt, ...)
+	if log_suspend or dev_mode == DevLevels.DISABLED then return end
+
+	local hash = checksum(lvl, id, fmt, ...)
+	local now = os.time()
+	if log_timeout[hash] and log_timeout[hash] >= now then return end
+	for k, v in pairs(log_timeout) do
+		--Remove stale log entries older than 60 seconds.
+		if v < now - 60 then log_timeout[k] = nil end
+	end
+	log_timeout[hash] = now + 5 --Timout for 5 seconds.
+
+	if not fmt then
+		lvl = LogLevels.ERROR
+		fmt = "Format string in log() is empty!"
+	end
+
+	local tag =
+		lvl == LogLevels.ERROR and "[Error]  " or
+		lvl == LogLevels.WARN and "[Warn]   " or
+		"[Info]   "
+
+	local msg = format("[TPVCamTool]  [%04X]  %s%s", id or 0, tag, format(fmt, ...))
+
+	if dev_mode >= DevLevels.FULL then
+		(lvl == LogLevels.ERROR and spdlog.error or spdlog.info)(msg)
+	end
+
+	if dev_mode >= DevLevels.ALERT then
+		if runtime_full then
+			local toast = "\u{f035f} " .. msg
+
+			local tt =
+				lvl == LogLevels.ERROR and ImGui.ToastType.Error or
+				lvl == LogLevels.WARN and ImGui.ToastType.Warning or
+				ImGui.ToastType.Info
+
+			toaster_bumps[tt] = toaster_bumps[tt] and (toaster_bumps[tt] .. "\n\n" .. toast) or toast
+			toaster_active = true
+		else
+			local player = Game.GetPlayer()
+			if player then player:SetWarningMessage(msg, 5) end
+		end
+	end
+
+	if dev_mode >= DevLevels.BASIC then
+		print(msg)
+	end
+end
+
+---Forces a log message to be emitted using a temporary `dev_mode` override.
+---Useful for outputting messages regardless of the current developer mode setting.
+---Internally calls `log()` with the given parameters, then restores the previous `dev_mode`.
+---@param mode DevLevelType # Temporary debug mode to use.
+---@param lvl LogLevelType # Log level passed to `log()`.
+---@param id integer # The ID used for location tracing.
+---@param fmt string # Format string for the message.
+---@vararg any # Optional arguments for formatting the message.
+local function logF(mode, lvl, id, fmt, ...)
+	if mode <= DevLevels.DISABLED then return end
+	local prev = dev_mode
+	dev_mode = prev < mode and mode or prev
+	log(lvl, id, fmt, ...)
+	dev_mode = prev
+end
+
+---Creates a recurring timer that executes a callback every `interval` seconds.
+---@param interval number Time in seconds between executions.
+---@param callback fun(id: integer) The function to call each time, receives its timer ID.
+---@return integer timerID
+local function callEvery(interval, callback)
+	if not isNumber(interval) or not isFunction(callback) then
+		return -1
+	end
+
+	call_id_counter = call_id_counter + 1
+
+	local id = call_id_counter
+	call_timers[id] = {
+		interval = interval,
+		callback = callback,
+		time = interval,
+		active = true
+	}
+
+	call_is_active = true
+
+	return id
+end
+
+---Stops and removes a recurring timer with the given ID.
+---@param id integer Timer ID to halt.
+local function callHalt(id)
+	call_timers[id] = nil
+	call_is_active = next(call_timers) ~= nil
 end
 
 --#endregion
@@ -1614,20 +1672,18 @@ local function applyPreset(preset, id, count)
 		end
 
 		local pset = camera_presets[key]
-		if isTableNotEmpty(pset) then
-			resetCustomCameraParams(key)
-			applyPreset(pset, cid, 0)
+		if not isTableNotEmpty(pset) then return end
 
-			--Tracks preset usage
-			local usage = preset_usage[key] or {}
-			local now = os.time()
-			usage.First = usage.First or now
-			usage.Last = now
-			usage.Total = usage.Total and usage.Total + 1 or 1
-			preset_usage[key] = usage
-		end
+		resetCustomCameraParams(key)
+		if not applyPreset(pset, cid) then return end
 
-		return
+		--Tracks usage statistics.
+		local usage = preset_usage[key] or {}
+		local now = os.time()
+		usage.First = usage.First or now
+		usage.Last = now
+		usage.Total = usage.Total and usage.Total + 1 or 1
+		preset_usage[key] = usage
 	end
 
 	if preset and preset.Link then
@@ -1637,8 +1693,7 @@ local function applyPreset(preset, id, count)
 		end
 		preset = camera_presets[preset.Link]
 		if preset and preset.Link and count < 8 then
-			applyPreset(preset, id, count)
-			return
+			return applyPreset(preset, id, count)
 		end
 	end
 
@@ -2180,7 +2235,8 @@ local function getMetrics()
 
 	local st = ImGui.GetStyle()
 	local sp = st.ItemSpacing.x
-	local hf = ceil(w * 0.5 - (sp * 0.5))
+	local hf = w * 0.5
+	hf = min(hf, ceil(abs(hf - (sp * 0.5))))
 
 	local h = ImGui.GetFontSize()
 	local s = h / 18
@@ -2582,6 +2638,7 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 			if addPopupYesNo(f, format(Text.GUI_FMAN_DEL_CONFIRM, f), scale, Colors.GARNET) then
 				local path = getPresetFilePath(f) ---@cast path string
 				local ok, err = os.remove(path)
+				log_suspend = false
 				if ok then
 					for n in pairs(editor_bundles) do
 						local parts = split(n, "*")
@@ -2679,19 +2736,6 @@ registerForEvent("onInit", function()
 	runtime_min = isRuntimeVersionAtLeast("1.35")
 	runtime_full = isRuntimeVersionAtLeast("1.35.1")
 
-	--Save default presets.
-	--[[
-	local defaults = {
-		"v_militech_basilisk_CameraPreset"
-	}
-	for _, value in ipairs(defaults) do
-		local preset = getPreset(value)
-		if preset then
-			savePreset(preset.ID, preset, true, true)
-		end
-	end
-	]]
-
 	--Load all saved data from disk; apply preset only if the player is in a vehicle.
 	onInit()
 
@@ -2702,13 +2746,30 @@ registerForEvent("onInit", function()
 	--When the player unmounts from a vehicle, reset to default camera offsets.
 	Observe("VehicleComponent", "OnUnmountingEvent", onUnmount)
 
-	--Reset the current editor state when the player takes control of their character
-	--(usually after loading a save game). This ensures UI does not persist stale data.
+	--Triggered when control over the player character is gained (e.g. after loading a save).
 	Observe("PlayerPuppet", "OnTakeControl", function(self)
-		if not mod_enabled or self:GetEntityID().hash ~= 1 then return end
+		if not mod_enabled or overlay_locked or self:GetEntityID().hash ~= 1 then return end
+
+		overlay_locked = true
 		file_man_open = false
-		onUnmount()
-		onMount()
+		onUnmount(true)
+
+		local devMode = dev_mode
+		callEvery(0.3, function(id)
+			if not mod_enabled then
+				callHalt(id)
+				overlay_locked = false
+				return
+			end
+
+			dev_mode = DevLevels.DISABLED
+			if not getMountedVehicle() then return end
+
+			callHalt(id)
+			applyPreset()
+			dev_mode = devMode
+			overlay_locked = false
+		end)
 	end)
 end)
 
@@ -2740,6 +2801,11 @@ registerForEvent("onDraw", function()
 
 	--Main window begins.
 	if not ImGui.Begin(Text.GUI_TITL, ImGuiWindowFlags.AlwaysAutoResize) then return end
+
+	local locked = overlay_locked
+	if locked then
+		ImGui.BeginDisabled(true)
+	end
 
 	--Computes scaled layout values (content width, control sizes, and paddings) based on the UI scale factor.
 	local contentWidth, halfContentWidth, scale, controlPadding = getMetrics()
@@ -2826,7 +2892,7 @@ registerForEvent("onDraw", function()
 	local vehicle, name, appName, id, key
 	local steps = {
 		function()
-			return dev_mode > DevLevels.DISABLED
+			return not locked and dev_mode > DevLevels.DISABLED
 		end,
 		function()
 			vehicle = getMountedVehicle()
@@ -2889,10 +2955,14 @@ registerForEvent("onDraw", function()
 			--Button to open the Preset File Manager.
 			local x, y, w, h = addFileManButton(contentWidth, heightPadding, halfHeightPadding, buttonHeight)
 
+			if locked then
+				ImGui.EndDisabled()
+			end
+
 			--Main window is done.
 			ImGui.End()
 
-			--Opens the Preset File Manager window when toggled.
+			--Opens the Preset File Manager window when button triggered.
 			openFileManWindow(scale, controlPadding, halfHeightPadding, buttonHeight, x, y, w, h)
 			return
 		end
@@ -2946,7 +3016,7 @@ registerForEvent("onDraw", function()
 			}
 		}
 
-		local maxInputWidth = floor((contentWidth - 38) * scale)
+		local maxInputWidth = floor(max(16, (contentWidth - 38)) * scale)
 		for _, row in ipairs(rows) do
 			if not areString(row.label, row.value) then goto continue end
 
@@ -3190,5 +3260,23 @@ end)
 
 --Restores default camera offsets for vehicles upon mod shutdown.
 registerForEvent("onShutdown", onShutdown)
+
+---Called every frame to update active timers.
+---Processes all running `callEvery` timers and executes their callbacks when their interval elapses.
+registerForEvent("onUpdate", function(deltaTime)
+	if not call_is_active then return end
+
+	for id, timer in pairs(call_timers) do
+		if not timer.active then goto continue end
+
+		timer.time = timer.time - deltaTime
+		if timer.time > 0 then goto continue end
+
+		timer.callback(id)
+		timer.time = timer.interval
+
+		::continue::
+	end
+end)
 
 --#endregion
