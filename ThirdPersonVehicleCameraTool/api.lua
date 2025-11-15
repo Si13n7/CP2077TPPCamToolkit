@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-10-05, 10:34 UTC+01:00 (MEZ)
+Version: 2025-10-08, 18:48 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -23,9 +23,12 @@ ______________________________________________
 
 ---Provides functions to create graphical user interface elements within the Cyber Engine Tweaks overlay.
 ---@class ImGui
----@field Begin fun(title: string, flags?: integer): boolean # Begins a new ImGui window with optional flags. Must be closed with `ImGui.End()`. Returns `true` if the window is open and should be rendered.
----@field Begin fun(title: string, open: boolean, flags?: integer): boolean # Begins a new ImGui window. Returns `true` if the window is open and should be rendered. If `open` is `false`, the window is not shown.
+---@field Begin fun(title: string, flags?: integer): boolean # Begins a new ImGui window with optional flags. Must be closed with `ImGui.End()`. Returns true if the window is open and should be rendered.
+---@field Begin fun(title: string, open: boolean, flags?: integer): boolean # Begins a new ImGui window. Returns true if the window is open and should be rendered. If `open` is false, the window is not shown.
 ---@field End fun() # Ends the creation of the current ImGui window. Must always be called after `ImGui.Begin()`.
+---@field CollapsingHeader fun(label: string, flags?: integer): boolean # Creates a collapsible header that can be opened or closed. Returns true if the header is open.
+---@field BeginChild fun(id: string, width?: number, height?: number, border?: boolean): boolean # Begins a child window or region inside the current window. Must be closed with `ImGui.EndChild()`. Returns true if the child window is visible and should be rendered.
+---@field EndChild fun() # Ends the creation of a child window started with `ImGui.BeginChild()`.
 ---@field Separator fun() # Draws a horizontal line to visually separate UI sections.
 ---@field Dummy fun(width: number, height: number) # Creates an invisible element of specified width and height, useful for spacing.
 ---@field SameLine fun(offsetX?: number, spacing?: number) # Places the next UI element on the same line. Optionally adds horizontal offset and spacing.
@@ -43,30 +46,32 @@ ______________________________________________
 ---@field PopItemWidth fun() # Resets the width of the next UI element to the default value.
 ---@field BeginTooltip fun() # Begins creating a tooltip. Must be paired with `ImGui.EndTooltip()`.
 ---@field EndTooltip fun() # Ends the creation of a tooltip. Must be called after `ImGui.BeginTooltip()`.
----@field BeginTable fun(id: string, columns: integer, flags?: integer): boolean # Begins a table with the specified number of columns. Returns `true` if the table is created successfully and should be rendered.
+---@field BeginTable fun(id: string, columns: integer, flags?: integer): boolean # Begins a table with the specified number of columns. Returns true if the table is created successfully and should be rendered.
 ---@field TableSetupColumn fun(label: string, flags?: integer, init_width_or_weight?: number) # Defines a column in the current table with optional flags and initial width or weight.
 ---@field TableHeadersRow fun() # Automatically creates a header row using column labels defined by `TableSetupColumn()`. Must be called right after defining the columns.
 ---@field TableNextRow fun(row_flags?: integer, min_row_height?: number) # Advances to the next row. Optional: row flags and minimum height in pixels.
----@field TableSetColumnIndex fun(index: integer) # Moves the focus to a specific column index within the current table row.
+---@field TableNextColumn fun() # Advances to the next column in the current table row. Resets to column 0 after the last column.
 ---@field EndTable fun() # Ends the creation of the current table. Must always be called after `ImGui.BeginTable()`.
 ---@field GetColumnWidth fun(columnIndex?: integer): number # Returns the current width in pixels of the specified column index (default: 0). Only valid when called within an active table.
+---@field GetFrameHeight fun(): number # Returns the height of a standard frame (e.g., button, input box) in pixels.
 ---@field GetContentRegionAvail fun(): number # Returns the width of the remaining content region inside the current window, excluding padding. Useful for calculating dynamic layouts or centering elements.
 ---@field GetScrollMaxY fun(): number # Returns the maximum vertical scroll offset of the current window. If greater than 0, a vertical scrollbar is visible. Useful to determine scroll range and scrollbar visibility.
 ---@field CalcTextSize fun(text: string): number # Calculates the width of a given text string as it would be displayed using the current font. Returns the width in pixels as a floating-point number.
 ---@field GetStyle fun(): ImGuiStyle # Returns the current ImGui style object, which contains values for UI layout, spacing, padding, rounding, and more.
 ---@field GetWindowPos fun(): number, number # Returns the X and Y position of the current window, relative to the screen.
 ---@field GetWindowSize fun(): number, number # Returns the width and height of the current window in pixels.
----@field SetNextWindowPos fun(x: number, y: number) # Sets the position for the next window before calling ImGui.Begin().
----@field SetNextWindowSize fun(width: number, height: number) # Sets the size for the next window before calling ImGui.Begin().
+---@field SetNextWindowPos fun(x: number, y: number) # Sets the position for the next window before calling `ImGui.Begin()`.
+---@field SetNextWindowSize fun(width: number, height: number) # Sets the size for the next window before calling `ImGui.Begin()`.
+---@field SetNextWindowSizeConstraints fun(minWidth: number, minHeight: number, maxWidth?: number, maxHeight?: number) # Sets minimum and optional maximum size constraints for the next window. Must be called before `ImGui.Begin()`.
 ---@field GetFontSize fun(): number # Returns the height in pixels of the currently used font. Useful for vertical alignment calculations.
 ---@field GetCursorPosX fun(): number # Returns the current X-position of the cursor within the window. Can be used to place elements precisely.
 ---@field GetCursorPosY fun(): number # Returns the current Y-position of the cursor within the window. Can be used to place elements precisely.
 ---@field SetCursorPosX fun(x: number) # Sets the X-position of the cursor within the window. Useful for manual horizontal positioning of UI elements.
 ---@field SetCursorPosY fun(y: number) # Sets the Y-position of the cursor within the window. Use to manually position elements vertically.
----@field OpenPopup fun(id: string) # Opens a popup by identifier. Should be followed by ImGui.BeginPopup().
+---@field OpenPopup fun(id: string) # Opens a popup by identifier. Should be followed by `ImGui.BeginPopup()`.
 ---@field BeginPopup fun(id: string): boolean # Starts a popup window with the given ID. Returns true if it should be drawn.
 ---@field CloseCurrentPopup fun() # Closes the currently open popup window. Should be called inside the popup itself.
----@field EndPopup fun() # Ends the current popup window. Always call after BeginPopup().
+---@field EndPopup fun() # Ends the current popup window. Always call after `BeginPopup()`.
 ---@field PushStyleColor fun(idx: integer, color: integer) # Pushes a new color style override for the current ImGui context.
 ---@field PopStyleColor fun(count?: integer) # Removes one or more pushed style colors from the stack. Default count is 1.
 ---@field PopStyleColor fun(count?: integer) # Removes one or more pushed style colors from the stack. Default count is 1.
@@ -85,11 +90,17 @@ ImGui = ImGui
 ---@field NoInputs integer # Disables all inputs (mouse, keyboard, etc.) for the window.
 ImGuiWindowFlags = ImGuiWindowFlags
 
+---Flags for customizing tree node and collapsing header behavior in ImGui.
+---@class ImGuiTreeNodeFlags
+---@field DefaultOpen integer # Node is open by default.
+ImGuiTreeNodeFlags = ImGuiTreeNodeFlags
+
 ---Flags to customize table behavior and appearance.
 ---@class ImGuiTableFlags
 ---@field Borders integer # Draws borders between cells.
 ---@field NoBordersInBody integer # Removes all inner borders between rows and columns in the body of the table (excluding headers). Improves visual minimalism.
 ---@field SizingFixedFit integer # Columns use fixed width and will not stretch. Useful when exact sizes are required (e.g., for alignment or layout consistency).
+---@field RowBg integer # Draw alternating row background colors for easier readability.
 ImGuiTableFlags = ImGuiTableFlags
 
 ---Flags to customize individual columns within a table.
@@ -98,7 +109,7 @@ ImGuiTableFlags = ImGuiTableFlags
 ---@field WidthFixed integer # Makes the column have a fixed width.
 ImGuiTableColumnFlags = ImGuiTableColumnFlags
 
----UI color indices used for styling via ImGui.PushStyleColor().
+---UI color indices used for styling via `ImGui.PushStyleColor()`.
 ---Each index refers to a specific UI element's color.
 ---@class ImGuiCol
 ---@field Text integer # Color of text.
@@ -114,6 +125,7 @@ ImGuiCol = ImGuiCol
 ---@class ImGuiStyle
 ---@field ItemSpacing { x: number, y: number } # Horizontal and vertical spacing between widgets.
 ---@field FramePadding { x: number, y: number } # Padding within a framed widget like a button or input box. Affects internal spacing horizontally (x) and vertically (y).
+---@field ScrollbarSize number # Horizontal scrollbar width.
 ImGuiStyle = ImGuiStyle
 
 ---Enumerates the available types of Toast notifications for ImGui popups.
@@ -143,6 +155,8 @@ bit32 = bit32
 ---@class TweakDB
 ---@field GetFlat fun(self: TweakDB, key: string): any? # Retrieves a value from the database based on the provided key.
 ---@field SetFlat fun(self: TweakDB, key: string, value: any) # Sets or modifies a value in the database for the specified key.
+---@field SetFlatNoUpdate fun(self: TweakDB, key: string, value: any) # Sets or modifies a value in the database without applying it immediately. Useful when updating multiple values at once.
+---@field Update fun(self: TweakDB, key: string) # Applies the pending change for the specified key that was set with `SetFlatNoUpdate`.
 TweakDB = TweakDB
 
 ---Represents a TweakDB ID used to reference records in the game database.
@@ -155,12 +169,12 @@ TDBID = TDBID
 ---@class SystemRequestsHandler
 ---@field GetGameVersion fun(): string # Returns the current game version string.
 
----Represents an internal game name type. Can be converted to a readable string using Game.NameToString().
+---Represents an internal game name type. Can be converted to a readable string using `Game.NameToString(name)`.
 ---@class CName
 
 ---Represents a single vehicle appearance entry.
 ---@class VehicleAppearance
----@field name CName # The internal name/ID of the appearance. Use Game.NameToString(name) to get a readable string.
+---@field name CName # The internal name/ID of the appearance. Use `Game.NameToString(name)` to get a readable string.
 
 ---Represents a loaded game resource, including its appearances.
 ---@class GameResource
@@ -182,9 +196,26 @@ TDBID = TDBID
 ---Represents a vehicle entity within the game, providing functions to interact with it, such as getting the appearance name.
 ---@class Vehicle
 ---@field GetRecordID fun(self: Vehicle): any # Returns the unique TweakDBID associated with the vehicle.
----@field GetTDBID fun(self: Vehicle): TDBID? # Retrieves the internal TweakDB identifier used to reference this vehicle in the game database. Returns `nil` if unavailable.
+---@field GetTDBID fun(self: Vehicle): TDBID? # Retrieves the internal TweakDB identifier used to reference this vehicle in the game database. Returns nil if unavailable.
 ---@field GetCurrentAppearanceName fun(self: Vehicle): CName? # Retrieves the current appearance name of the vehicle.
 ---@field GetDisplayName fun(self: Vehicle): string? # Retrieves the human-readable display name of the vehicle.
+
+---Represents a single settings variable within the game's SettingsSystem.
+---@class ConfigVar
+---@field GetType fun(self: ConfigVar): { value: string } # Returns the data type of the variable (e.g., "Bool", "Int", "Float", etc.).
+---@field GetValue fun(self: ConfigVar): any # Returns the current value of the variable.
+---@field GetDefaultValue fun(self: ConfigVar): any # Returns the default value of the variable.
+---@field GetMinValue fun(self: ConfigVar): number? # Returns the minimum allowed value for numeric variables.
+---@field GetMaxValue fun(self: ConfigVar): number? # Returns the maximum allowed value for numeric variables.
+---@field GetStepValue fun(self: ConfigVar): number? # Returns the step size for numeric variables.
+---@field GetValues fun(self: ConfigVar): any[]? # Returns all possible values for list-type variables.
+---@field GetIndex fun(self: ConfigVar): integer? # Returns the current index for list-type variables.
+---@field GetDefaultIndex fun(self: ConfigVar): integer? # Returns the default index for list-type variables.
+
+---Provides access to game settings and configuration variables.
+---@class SettingsSystem
+---@field HasVar fun(self: SettingsSystem, group: string, option: string): boolean # Checks if a variable exists in the given group.
+---@field GetVar fun(self: SettingsSystem, group: string, option: string): ConfigVar # Retrieves a variable object if it exists.
 
 ---Provides various global game functions, such as getting the player, mounted vehicles, and converting names to strings.
 ---@class Game
@@ -193,6 +224,7 @@ TDBID = TDBID
 ---@field GetResourceDepot fun(): ResourceDepot? # Returns the resource depot object, or nil if not available.
 ---@field GetPlayer fun(): Player? # Retrieves the current player instance if available.
 ---@field GetMountedVehicle fun(player: Player): Vehicle? # Returns the vehicle the player is currently mounted in, if any.
+---@field GetSettingsSystem fun(): SettingsSystem # Provides access to the global settings system used to query and modify game options.
 Game = Game
 
 ---Represents a three-dimensional vector, commonly used for positions or directions in the game.
@@ -213,6 +245,11 @@ json = json
 ---@class GetVersion # Not a class — provided by CET.
 ---@field GetVersion fun(): string # Returns the runtime version as a string, typically formatted like "v1.2.3.4".
 GetVersion = GetVersion
+
+---Returns the current screen resolution as width and height in pixels.
+---@class GetDisplayResolution # Not a class — provided by CET.
+---@field GetDisplayResolution fun(): integer, integer # Returns width and height of the active display in pixels.
+GetDisplayResolution = GetDisplayResolution
 
 ---Provides functionality to observe game events, allowing custom functions to be executed when certain events occur.
 ---@class Observe # Not a class — provided by CET.
