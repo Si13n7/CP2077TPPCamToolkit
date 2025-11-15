@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-03, 13:54 UTC+01:00 (MEZ)
+Version: 2025-04-03, 17:43 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -329,6 +329,14 @@ local function stringTableContains(tbl, str)
 	return false
 end
 
+---Checks if a string starts with a given prefix.
+---@param str string # The string to check.
+---@param prefix string # The prefix to match.
+---@return boolean # True if 'str' starts with 'prefix', false otherwise.
+local function stringStartsWith(str, prefix)
+	return #prefix <= #str and str:sub(1, #prefix) == prefix
+end
+
 ---Checks if a string ends with a specified suffix.
 ---@param str string The string to check.
 ---@param suffix string The suffix to look for.
@@ -405,7 +413,7 @@ end
 ---A preset is valid if it either:
 ---1. Has a string ID and at least one of Close, Medium, or Far contains a numeric `y` or `z` value.
 ---2. Or: has only a string `Link` and no other keys.
----@param preset table # The preset to validate.
+---@param preset CameraOffsetPreset # The preset to validate.
 ---@return boolean # Returns true if the preset is valid, false otherwise.
 local function isCameraOffsetPresetValid(preset)
 	if type(preset) ~= "table" then return false end
@@ -615,6 +623,26 @@ local function getVehicleName(vehicle)
 	return Game.NameToString(name)
 end
 
+---Finds the best matching preset key for a given vehicle name.
+---First tries for an exact match, then falls back to partial match using string prefix.
+---@param name string|nil # The vehicle name to match against preset keys.
+---@return string|nil # The matching preset key if found, or nil otherwise.
+local function getCameraPresetKey(name)
+	if not name then return nil end
+
+	for pass = 1, 2 do
+		for key in pairs(_cameraOffsetPresets) do
+			local exact = pass == 1 and name == key
+			local partial = pass == 2 and stringStartsWith(name, key)
+			if exact or partial then
+				return key
+			end
+		end
+	end
+
+	return nil
+end
+
 ---Applies the appropriate camera offset preset when the player mounts a vehicle, if available.
 local function autoApplyCameraOffsetPreset()
 	local vehicle = getMountedVehicle()
@@ -632,13 +660,10 @@ local function autoApplyCameraOffsetPreset()
 		end
 	end
 
-	for key, entry in pairs(_cameraOffsetPresets) do
-		if name == key then
-			Log(LogLevel.Info, "Apply camera preset: '%s'", entry.Link or name)
-			applyCameraOffsetPreset(entry)
-			return
-		end
-	end
+	local key = getCameraPresetKey(name)
+	if not key then return end
+
+	applyCameraOffsetPreset(_cameraOffsetPresets[key])
 end
 
 ---Saves the current preset to './presets/<name>.lua' only if the file doesn't already exist.
@@ -839,10 +864,21 @@ registerForEvent("onDraw", function()
 	--Table showing vehicle name and camera ID — if certain conditions are met.
 	local vehicle, name, id
 	for _, fn in ipairs({
-		function() return DevMode > DevLevel.Disabled end,
-		function() vehicle = getMountedVehicle(); return vehicle end,
-		function() name = getVehicleName(vehicle); return name end,
-		function() id = getVehicleCameraID(vehicle); return id end
+		function()
+			return DevMode > DevLevel.Disabled
+		end,
+		function()
+			vehicle = getMountedVehicle()
+			return vehicle
+		end,
+		function()
+			name = getVehicleName(vehicle)
+			return name
+		end,
+		function()
+			id = getVehicleCameraID(vehicle)
+			return id
+		end
 	}) do
 		if not fn() then
 			--Condition not met — GUI closed.
@@ -852,13 +888,16 @@ registerForEvent("onDraw", function()
 	end
 
 	if ImGui.BeginTable("InfoTable", 2, ImGuiTableFlags.Borders) then
-		ImGui.TableSetupColumn("Key", ImGuiTableColumnFlags.WidthFixed, 44)
+		ImGui.TableSetupColumn("Key", ImGuiTableColumnFlags.WidthFixed, -1)
 		ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
+		local key = getCameraPresetKey(name)
 		local dict = {
-			{ key = "Vehicle", value = name },
-			{ key = "Cam ID",  value = id }
+			{ key = "Vehicle",    value = name },
+			{ key = "Camera ID",  value = id },
+			{ key = "Preset",     value = (key or id) .. ".lua" },
+			{ key = "Is Default", value = tostring(key == nil) }
 		}
 		for _, item in ipairs(dict) do
 			ImGui.TableNextRow()
@@ -898,7 +937,7 @@ registerForEvent("onDraw", function()
 	end
 
 	if ImGui.BeginTable("CameraOffsetEditor", 3, ImGuiTableFlags.Borders) then
-		ImGui.TableSetupColumn("Level", ImGuiTableColumnFlags.WidthFixed, 50)
+		ImGui.TableSetupColumn("Level", ImGuiTableColumnFlags.WidthFixed, -1)
 		ImGui.TableSetupColumn("Y Offset", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableSetupColumn("Z Offset", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
@@ -914,7 +953,7 @@ registerForEvent("onDraw", function()
 				local original = _originalEntries[name][key] or {}
 				for i, axis in ipairs({ "y", "z" }) do
 					ImGui.TableSetColumnIndex(i)
-					ImGui.PushItemWidth(102)
+					ImGui.PushItemWidth(-1)
 					local curVal = offsets[axis] or original[axis] or 0.0
 					local minVal = i == 1 and -10 or 0
 					local maxVal = i == 1 and 10 or 32
