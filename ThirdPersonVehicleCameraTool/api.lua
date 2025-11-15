@@ -25,13 +25,13 @@ ______________________________________________
 ---@class ImGui
 ---@field Begin fun(title: string, flags?: integer): boolean # Begins a new ImGui window with optional flags. Must be closed with `ImGui.End()`. Returns `true` if the window is open and should be rendered.
 ---@field Begin fun(title: string, open: boolean, flags?: integer): boolean # Begins a new ImGui window. Returns `true` if the window is open and should be rendered. If `open` is `false`, the window is not shown.
----@field End fun(): nil # Ends the creation of the current ImGui window. Must always be called after `ImGui.Begin()`.
----@field Separator fun(): nil # Draws a horizontal line to visually separate UI sections.
----@field Dummy fun(width: number, height: number): nil # Creates an invisible element of specified width and height, useful for spacing.
----@field SameLine fun(offsetX?: number, spacing?: number): nil # Places the next UI element on the same line. Optionally adds horizontal offset and spacing.
----@field Text fun(text: string): nil # Displays text within the current window or tooltip.
----@field PushTextWrapPos fun(wrapLocalPosX?: number): nil # Sets a maximum width (in pixels) for wrapping text. Applies to subsequent Text elements until `PopTextWrapPos()` is called. If no value is provided, wraps at the edge of the window.
----@field PopTextWrapPos fun(): nil # Restores the previous text wrapping position. Should be called after `PushTextWrapPos()` to reset wrapping behavior.
+---@field End fun() # Ends the creation of the current ImGui window. Must always be called after `ImGui.Begin()`.
+---@field Separator fun() # Draws a horizontal line to visually separate UI sections.
+---@field Dummy fun(width: number, height: number) # Creates an invisible element of specified width and height, useful for spacing.
+---@field SameLine fun(offsetX?: number, spacing?: number) # Places the next UI element on the same line. Optionally adds horizontal offset and spacing.
+---@field Text fun(text: string) # Displays text within the current window or tooltip.
+---@field PushTextWrapPos fun(wrapLocalPosX?: number) # Sets a maximum width (in pixels) for wrapping text. Applies to subsequent Text elements until `PopTextWrapPos()` is called. If no value is provided, wraps at the edge of the window.
+---@field PopTextWrapPos fun() # Restores the previous text wrapping position. Should be called after `PushTextWrapPos()` to reset wrapping behavior.
 ---@field Button fun(label: string, width?: number, height?: number): boolean # Creates a clickable button with optional width and height. Returns true if the button was clicked.
 ---@field Checkbox fun(label: string, value: boolean): (boolean, boolean) # Creates a toggleable checkbox. Returns `changed` (true if state has changed) and `value` (the new state).
 ---@field InputText fun(label: string, value: string, maxLength?: integer): (string, boolean) # Creates a single-line text input field. Returns a tuple: the `new value` and `changed` (true if the text was edited).
@@ -39,36 +39,36 @@ ______________________________________________
 ---@field DragFloat fun(label: string, value: number, speed?: number, min?: number, max?: number, format?: string): number # Creates a draggable float input widget. Allows the user to adjust the value by dragging or with arrow keys. Optional speed, min/max limits, and format string. Returns the updated float value.
 ---@field IsItemHovered fun(): boolean # Returns true if the last item is hovered by the mouse cursor.
 ---@field IsItemActive fun(): boolean # Returns true while the last item is being actively used (e.g., held with mouse or keyboard input).
----@field PushItemWidth fun(width: number): nil # Sets the width of the next UI element (e.g., slider, text input).
----@field PopItemWidth fun(): nil # Resets the width of the next UI element to the default value.
----@field BeginTooltip fun(): nil # Begins creating a tooltip. Must be paired with `ImGui.EndTooltip()`.
----@field EndTooltip fun(): nil # Ends the creation of a tooltip. Must be called after `ImGui.BeginTooltip()`.
+---@field PushItemWidth fun(width: number) # Sets the width of the next UI element (e.g., slider, text input).
+---@field PopItemWidth fun() # Resets the width of the next UI element to the default value.
+---@field BeginTooltip fun() # Begins creating a tooltip. Must be paired with `ImGui.EndTooltip()`.
+---@field EndTooltip fun() # Ends the creation of a tooltip. Must be called after `ImGui.BeginTooltip()`.
 ---@field BeginTable fun(id: string, columns: integer, flags?: integer): boolean # Begins a table with the specified number of columns. Returns `true` if the table is created successfully and should be rendered.
----@field TableSetupColumn fun(label: string, flags?: integer, init_width_or_weight?: number): nil # Defines a column in the current table with optional flags and initial width or weight.
----@field TableHeadersRow fun(): nil # Automatically creates a header row using column labels defined by `TableSetupColumn()`. Must be called right after defining the columns.
----@field TableNextRow fun(row_flags?: integer, min_row_height?: number): nil # Advances to the next row. Optional: row flags and minimum height in pixels.
----@field TableSetColumnIndex fun(index: integer): nil # Moves the focus to a specific column index within the current table row.
----@field EndTable fun(): nil # Ends the creation of the current table. Must always be called after `ImGui.BeginTable()`.
+---@field TableSetupColumn fun(label: string, flags?: integer, init_width_or_weight?: number) # Defines a column in the current table with optional flags and initial width or weight.
+---@field TableHeadersRow fun() # Automatically creates a header row using column labels defined by `TableSetupColumn()`. Must be called right after defining the columns.
+---@field TableNextRow fun(row_flags?: integer, min_row_height?: number) # Advances to the next row. Optional: row flags and minimum height in pixels.
+---@field TableSetColumnIndex fun(index: integer) # Moves the focus to a specific column index within the current table row.
+---@field EndTable fun() # Ends the creation of the current table. Must always be called after `ImGui.BeginTable()`.
 ---@field GetColumnWidth fun(columnIndex?: integer): number # Returns the current width in pixels of the specified column index (default: 0). Only valid when called within an active table.
 ---@field GetContentRegionAvail fun(): number # Returns the width of the remaining content region inside the current window, excluding padding. Useful for calculating dynamic layouts or centering elements.
 ---@field CalcTextSize fun(text: string): number # Calculates the width of a given text string as it would be displayed using the current font. Returns the width in pixels as a floating-point number.
 ---@field GetStyle fun(): ImGuiStyle # Returns the current ImGui style object, which contains values for UI layout, spacing, padding, rounding, and more.
 ---@field GetWindowPos fun(): number, number # Returns the X and Y position of the current window, relative to the screen.
 ---@field GetWindowSize fun(): number, number # Returns the width and height of the current window in pixels.
----@field SetNextWindowPos fun(x: number, y: number): nil # Sets the position for the next window before calling ImGui.Begin().
----@field SetNextWindowSize fun(width: number, height: number): nil # Sets the size for the next window before calling ImGui.Begin().
+---@field SetNextWindowPos fun(x: number, y: number) # Sets the position for the next window before calling ImGui.Begin().
+---@field SetNextWindowSize fun(width: number, height: number) # Sets the size for the next window before calling ImGui.Begin().
 ---@field GetFontSize fun(): number # Returns the height in pixels of the currently used font. Useful for vertical alignment calculations.
 ---@field GetCursorPosY fun(): number # Returns the current Y-position of the cursor within the window. Can be used to place elements precisely.
----@field SetCursorPosX fun(x: number): nil # Sets the X-position of the cursor within the window. Useful for manual horizontal positioning of UI elements.
----@field SetCursorPosY fun(y: number): nil # Sets the Y-position of the cursor within the window. Use to manually position elements vertically.
----@field OpenPopup fun(id: string): nil # Opens a popup by identifier. Should be followed by ImGui.BeginPopup().
+---@field SetCursorPosX fun(x: number) # Sets the X-position of the cursor within the window. Useful for manual horizontal positioning of UI elements.
+---@field SetCursorPosY fun(y: number) # Sets the Y-position of the cursor within the window. Use to manually position elements vertically.
+---@field OpenPopup fun(id: string) # Opens a popup by identifier. Should be followed by ImGui.BeginPopup().
 ---@field BeginPopup fun(id: string): boolean # Starts a popup window with the given ID. Returns true if it should be drawn.
----@field CloseCurrentPopup fun(): nil # Closes the currently open popup window. Should be called inside the popup itself.
----@field EndPopup fun(): nil # Ends the current popup window. Always call after BeginPopup().
----@field PushStyleColor fun(idx: integer, color: integer): nil # Pushes a new color style override for the current ImGui context.
----@field PopStyleColor fun(count?: integer): nil # Removes one or more pushed style colors from the stack. Default count is 1.
----@field PopStyleColor fun(count?: integer): nil # Removes one or more pushed style colors from the stack. Default count is 1.
----@field ShowToast fun(toast: ImGui.Toast): nil # Displays a Toast notification instance immediately.
+---@field CloseCurrentPopup fun() # Closes the currently open popup window. Should be called inside the popup itself.
+---@field EndPopup fun() # Ends the current popup window. Always call after BeginPopup().
+---@field PushStyleColor fun(idx: integer, color: integer) # Pushes a new color style override for the current ImGui context.
+---@field PopStyleColor fun(count?: integer) # Removes one or more pushed style colors from the stack. Default count is 1.
+---@field PopStyleColor fun(count?: integer) # Removes one or more pushed style colors from the stack. Default count is 1.
+---@field ShowToast fun(toast: ImGui.Toast) # Displays a Toast notification instance immediately.
 ImGui = ImGui
 
 ---Flags used to configure ImGui window behavior and appearance.
@@ -151,7 +151,7 @@ Game = Game
 
 ---Represents the player character in the game, providing functions to interact with the player instance.
 ---@class Player
----@field SetWarningMessage fun(self: Player, message: string, duration: number): nil # Displays a warning message on the player's screen for a specified duration.
+---@field SetWarningMessage fun(self: Player, message: string, duration: number) # Displays a warning message on the player's screen for a specified duration.
 Player = Player
 
 ---Represents a vehicle entity within the game, providing functions to interact with it, such as getting the appearance name.
@@ -169,28 +169,28 @@ Vehicle = Vehicle
 ---@field new fun(x: number, y: number, z: number): Vector3 # Creates a new Vector3 instance with specified x, y, and z coordinates.
 Vector3 = Vector3
 
+---Provides version information about the currently running runtime environment.
+---@class GetVersion # Not a class — global function only.
+---@field GetVersion fun(): string # Returns the runtime version as a string, typically formatted like "v1.2.3.4".
+GetVersion = GetVersion
+
 ---Provides functionality to observe game events, allowing custom functions to be executed when certain events occur.
----@class Observe
----@field Observe fun(className: string, functionName: string, callback: fun(...): nil) # Sets up an observer for a specified function within the game.
+---@class Observe # Not a class — global function only.
+---@field Observe fun(className: string, functionName: string, callback: fun(...)) # Sets up an observer for a specified function within the game.
 Observe = Observe
 
 ---Allows the registration of functions to be executed when certain game events occur, such as initialization or shutdown.
----@class registerForEvent
----@field registerForEvent fun(eventName: string, callback: fun(...): nil) # Registers a callback function for a specified event (e.g., `onInit`, `onIsDefault`).
+---@class registerForEvent # Not a class — global function only.
+---@field registerForEvent fun(eventName: string, callback: fun(...)) # Registers a callback function for a specified event (e.g., `onInit`, `onIsDefault`).
 registerForEvent = registerForEvent
 
 ---Provides logging functionality, allowing messages to be printed to the console or log files for debugging purposes.
----@class spdlog
+---@class spdlog # Not a class — global function only.
 ---@field info fun(message: string) # Logs an informational message, typically used for general debug output.
 ---@field error fun(message: string) # Logs an error message, usually when something goes wrong.
 spdlog = spdlog
 
 ---Scans a directory and returns its contents.
----@class dir
+---@class dir # Not a class — global function only.
 ---@field dir fun(path: string): table # Returns a list of file/folder entries in the specified directory. Each entry is a table with at least a `name` field.
 dir = dir
-
----Provides version information about the currently running runtime environment.
----@class GetVersion
----@field GetVersion fun(): string # Returns the runtime version as a string, typically formatted like "v1.2.3.4".
-GetVersion = GetVersion

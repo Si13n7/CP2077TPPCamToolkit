@@ -1,0 +1,1 @@
+return{ID="4w_Galena",Close={y=0.4}}

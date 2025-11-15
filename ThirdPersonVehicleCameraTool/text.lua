@@ -66,7 +66,8 @@ return {
 
 	--LOG: ℹ️ Info
 	LOG_CAM_OSET_DONE = "Camera offset '%s' is complete.",
-	LOG_CAM_PSET = "Camera preset: '%s'",
+	LOG_CAM_PSET = "Camera preset: '%s'.",
+	LOG_DEL_EPSET = "Last editor preset has been removed.",
 	LOG_DEL_SUCCESS = "Deleted preset '%s'.",
 	LOG_FOUND_DEF = "Default preset '%s' found.",
 	LOG_LINK_PSET = "Following linked preset (%d): '%s'",
