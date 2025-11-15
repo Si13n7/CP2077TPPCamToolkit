@@ -6,18 +6,30 @@ This file is distributed under the MIT License
 Custom Vehicle - TPP Camera Fixes
 
 Adjusts third-person perspective (TPP) camera
-offsets for specific custom vehicles that are
-misaligned compared to stock ones.
+offsets for specific custom vehicles.
 ----------------------------------------------
 
 Filename: init.lua
-Version: 2025-03-21, 11:51 UTC+01:00 (MEZ)
+Version: 2025-03-24, 00:22 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
 ______________________________________________
 --]]
 
+
+--- ImGui Definition
+---@class ImGui
+--- Provides functions to create graphical user interface elements within the Cyber Engine Tweaks overlay.
+---@field Begin fun(title: string, flags?: number): boolean -- Begins a new ImGui window with optional flags. Must be closed with `ImGui.End()`. Returns `true` if the window is open and should be rendered.
+---@field End fun(): nil -- Ends the creation of the current ImGui window. Must always be called after `ImGui.Begin()`.
+---@field Checkbox fun(label: string, value: boolean): (boolean, boolean) -- Creates a toggleable checkbox. Returns `changed` (true if state has changed) and `value` (the new state).
+ImGui = ImGui
+
+--- ImGuiWindowFlags Definition
+---@class ImGuiWindowFlags
+---@field AlwaysAutoResize number -- Automatically resizes the window to fit its content each frame.
+ImGuiWindowFlags = ImGuiWindowFlags
 
 --- TweakDB Definition
 ---@class TweakDB
@@ -71,6 +83,18 @@ registerForEvent = registerForEvent
 --- Provides logging functionality, allowing messages to be printed to the console or log files for debugging purposes.
 ---@field error fun(message: string) -- Logs an error message, usually when something goes wrong.
 spdlog = spdlog
+
+---@type string
+-- The window title.
+local title = "Custom Vehicle - TPP Camera Fixes"
+
+---@type boolean
+-- Determines whether the CET overlay is open.
+local isOverlayOpen = false
+
+---@type boolean
+-- Determines whether the mod is enabled.
+local isEnabled = true
 
 ---@type number
 -- The current debug mode level controlling logging and alerts:
@@ -245,10 +269,7 @@ end
 ---@return CameraOffsetPreset|nil -- The camera offset data retrieved from 'TweakDB'.
 ---Retrieves the current camera offset data for the specified camera ID from 'TweakDB' and returns it as a 'CameraOffsetPreset' table.
 local function getCurrentCameraOffset(id)
-	local entry = {
-		ID = id,
-		Shutdown = true
-	}
+	local entry = { ID = id }
 	for i, path in ipairs(cameraOffsetPaths) do
 		local vec3 = getCameraLookAtOffset(id, path)
 		if not vec3 or not vec3.y then return nil end
@@ -282,6 +303,7 @@ local function loadDefaultCameraOffsetPresets()
 
 		local entry = getCurrentCameraOffset(id)
 		if entry then
+			entry.Shutdown = true
 			cameraOffsetPresets[key] = entry
 		end
 
@@ -304,11 +326,33 @@ local function applyCameraOffsetPreset(entry)
 	end
 end
 
--- Restores default camera offsets for vehicles.
+--- Restores default camera offsets for vehicles.
 local function applyDefaultCameraOffsetPresets()
 	for _, entry in pairs(cameraOffsetPresets) do
 		if entry.Shutdown then
 			applyCameraOffsetPreset(entry)
+		end
+	end
+end
+
+---Applies the appropriate camera offset preset when the player mounts a vehicle, if available.
+local function autoApplyCameraOffsetPreset()
+	local player = Game.GetPlayer()
+	if not player then return end
+
+	local vehicle = Game.GetMountedVehicle(player)
+	if not vehicle then return end
+
+	local name = Game.NameToString(vehicle:GetCurrentAppearanceName())
+	if mountedVehicleName == name then return end
+	mountedVehicleName = name;
+	write("Mounted vehicle: '%s'", name)
+
+	for key, entry in pairs(cameraOffsetPresets) do
+		if name == key or stringStartsWith(name, key) then
+			write("Apply camera preset: '%s'", entry.Link or name)
+			applyCameraOffsetPreset(entry)
+			break
 		end
 	end
 end
@@ -318,30 +362,43 @@ registerForEvent("onInit", function()
 	loadDefaultCameraOffsetPresets()
 
 	Observe("VehicleComponent", "OnMountingEvent", function()
-		local player = Game.GetPlayer()
-		if not player then return end
-
-		local vehicle = Game.GetMountedVehicle(player)
-		if not vehicle then return end
-
-		local name = Game.NameToString(vehicle:GetCurrentAppearanceName())
-		if mountedVehicleName == name then return end
-		mountedVehicleName = name;
-		write("Mounted vehicle: '%s'", name)
-
-		for key, entry in pairs(cameraOffsetPresets) do
-			if name == key or stringStartsWith(name, key) then
-				write("Apply camera preset: '%s'", entry.Link or name)
-				applyCameraOffsetPreset(entry)
-				break
-			end
-		end
+		if not isEnabled then return end
+		autoApplyCameraOffsetPreset()
 	end)
 
 	Observe("VehicleComponent", "OnUnmountingEvent", function()
+		if not isEnabled then return end
 		mountedVehicleName = nil
 		applyDefaultCameraOffsetPresets()
 	end)
+end)
+
+-- Detects when the CET overlay is opened.
+registerForEvent("onOverlayOpen", function()
+	isOverlayOpen = true
+end)
+
+-- Detects when the CET overlay is closed.
+registerForEvent("onOverlayClose", function()
+	isOverlayOpen = false
+end)
+
+-- Display a simple GUI some options.
+registerForEvent("onDraw", function()
+	if not isOverlayOpen then return end
+	if ImGui.Begin(title, ImGuiWindowFlags.AlwaysAutoResize) then
+		local changed = ImGui.Checkbox(title .. ": Enabled", isEnabled)
+		if changed ~= isEnabled then
+			isEnabled = changed
+			if isEnabled then
+				autoApplyCameraOffsetPreset()
+			else
+				mountedVehicleName = nil
+				applyDefaultCameraOffsetPresets()
+			end
+		end
+		ImGui.End()
+	end
 end)
 
 -- Restores default camera offsets for vehicles upon mod shutdown.
