@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-19, 16:31 UTC+01:00 (MEZ)
+Version: 2025-04-19, 19:14 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -1296,8 +1296,8 @@ local function addTooltip(...)
 		ImGui.BeginTooltip()
 		if not ImGui.BeginTable("TooltipTable", 2) then return end
 		for i = 1, count, 2 do
-			local key = tostring(select(i, ...))
-			local val = tostring(select(i + 1, ...) or "")
+			local key = tostring(select(i, ...) or " ")
+			local val = tostring(select(i + 1, ...) or " ")
 			ImGui.TableNextRow()
 			ImGui.TableSetColumnIndex(0)
 			ImGui.Text(key)
