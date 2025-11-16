@@ -91,11 +91,11 @@ The mod uses the following structure:
 
 ## ✔ Requirements
 
-- Cyberpunk 2077 **2.21 or higher**
+- [Cyberpunk 2077](https://www.gog.com/de/game/cyberpunk_2077) **2.21 or higher**
 - [Cyber Engine Tweaks](https://github.com/maximegmd/CyberEngineTweaks) **1.35 or higher**
-- (Optional) [Native Settings UI](https://github.com/justarandomguyintheinternet/CP77_nativeSettings) for additional UI integration
-- (Optional) [Codeware](https://github.com/psiberx/cp2077-codeware) for extended functionality
-- (Optional) [FovControl](https://github.com/Si13n7/CP2077-FovControl) for extended functionality
+- [Native Settings UI](https://github.com/justarandomguyintheinternet/CP77_nativeSettings) (optional – for additional UI integration)
+- [Codeware](https://github.com/psiberx/cp2077-codeware) (optional – for extended functionality)
+- [FovControl](https://github.com/Si13n7/CP2077-FovControl) (optional – for extended functionality)
 
 ---
 
