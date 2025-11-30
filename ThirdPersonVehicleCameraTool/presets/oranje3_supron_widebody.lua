@@ -1,0 +1,1 @@
+return{ID="v_standard25_mahir_supron_CameraPreset",Close={y=0,d=-0.15},Medium={y=0,d=0.75},Far={y=0,d=4.55}}
